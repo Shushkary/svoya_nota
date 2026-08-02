@@ -214,7 +214,12 @@ export function digestionActivityAt(meal, now = new Date(), digestionH = null) {
   const h = Number(digestionH) > 0 ? digestionH : normalized.digestionH;
   const elapsedMinutes = (now.getTime() - normalized.eatenAt) / 60_000;
   const durationMinutes = h * 60;
-  if (elapsedMinutes < 0 || elapsedMinutes > durationMinutes) return 0;
+  // Запись приёма — уже совершившийся факт, а не запланированное блюдо.
+  // Время может оказаться впереди часов устройства после ручного ввода,
+  // смены часового пояса или отката системных часов. Такой приём должен быть
+  // виден на тороиде сразу, а не пропадать до наступления указанного времени.
+  if (elapsedMinutes < 0) return 1;
+  if (elapsedMinutes > durationMinutes) return 0;
   return 1 - smoothstep(0.15, 1, elapsedMinutes / durationMinutes);
 }
 
