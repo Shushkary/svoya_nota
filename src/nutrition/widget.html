@@ -1,0 +1,1655 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Тороид · фазы клетки</title>
+<style>
+  /* Тема и шрифты — общие с приложением «Своя нота» (тёплая бумага + графит).
+     Палитра переменных перекартирована на светлую; сцена тороида остаётся тёмной,
+     чтобы сохранить читаемость анимированных индикаторов. Логика и алгоритмы не менялись. */
+  :root{
+    --void:#F6F2E9; --deep:#FCFAF3; --surface:#FFFFFF; --panel:#FCFAF3;
+    --border:rgba(36,35,31,0.10); --border-b:rgba(36,35,31,0.20);
+    --light:#24231F; --dim:rgba(36,35,31,0.62); --faint:rgba(36,35,31,0.42);
+    --violet:#31555C; --gold:#B0803F; --teal:#4A7C7E; --plant:#5D8A6E; --animal:#B0685C;
+    --f-serif:"Iowan Old Style","Palatino Linotype",Georgia,"Times New Roman",serif;
+    --f-sans:"Avenir Next","Segoe UI",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+  body{background:var(--void);color:var(--light);font-family:var(--f-serif);font-weight:400;font-size:15px;line-height:1.6;padding:1.2rem 1rem 3rem;}
+  /* инфо-кнопки — поясняющие тексты открываются отдельными окнами */
+  .info-btn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+    border:1px solid var(--border-b);border-radius:50%;background:transparent;color:var(--violet);
+    font-family:var(--f-sans);font-size:12px;line-height:1;cursor:pointer;vertical-align:middle;margin-left:0.4rem;}
+  .info-btn:hover{background:rgba(49,85,92,0.08);}
+  .modal .m-src{font-family:var(--f-serif);}
+  .modal p.mtext{font-family:var(--f-serif);font-size:14px;line-height:1.6;color:var(--dim);margin-bottom:0.8rem;}
+  .modal .mtext b{color:var(--light);font-weight:600;}
+  /* тёмная сцена канваса — острова визуализации в светлом интерфейсе */
+  .canvas-wrap{background:radial-gradient(ellipse at 50% 42%,#141c2c,#0a0e16)!important;border-color:rgba(120,160,220,0.28)!important;}
+  .canvas-wrap+*, .legend, .notice{--on-dark:0;}
+  .shell{max-width:1080px;margin:0 auto;}
+  .eyebrow{font-family:var(--f-sans);font-size:10px;letter-spacing:0.28em;color:var(--violet);text-transform:uppercase;margin-bottom:0.6rem;}
+  h1{font-family:var(--f-serif);font-weight:300;font-size:clamp(1.7rem,4vw,2.4rem);line-height:1.05;margin-bottom:0.4rem;}
+  h1 em{font-style:italic;color:var(--violet);}
+  .lede{font-family:var(--f-serif);font-style:italic;font-size:1.05rem;color:var(--dim);max-width:64ch;margin-bottom:1.5rem;}
+
+  .grid{display:grid;grid-template-columns:minmax(300px,46%) 1fr;gap:1.4rem;align-items:start;}
+  @media(max-width:820px){.grid{grid-template-columns:1fr;}}
+
+  /* canvas side */
+  .stage{position:sticky;top:1rem;}
+  @media(max-width:820px){.stage{position:static;}}
+  .canvas-wrap{background:radial-gradient(ellipse at 50% 42%,rgba(20,28,44,0.6),var(--deep));border:1px solid var(--border-b);border-radius:12px;padding:0.6rem;}
+  canvas{width:100%;aspect-ratio:1/1;display:block;}
+  .legend{display:flex;flex-wrap:wrap;gap:0.5rem 1rem;margin-top:0.7rem;font-family:var(--f-sans);font-size:9px;letter-spacing:0.04em;color:var(--faint);}
+  .legend span{display:flex;align-items:center;gap:0.35rem;}
+  .dotc{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .pulse-ic{width:9px;height:9px;border-radius:50%;display:inline-block;background:var(--violet);animation:pulseDot 1.6s ease-in-out infinite;}
+  @keyframes pulseDot{0%,100%{transform:scale(0.65);opacity:0.55;}50%{transform:scale(1.1);opacity:1;}}
+  .notice{font-family:var(--f-sans);font-size:9.5px;line-height:1.5;color:var(--faint);margin-top:0.7rem;border-left:2px solid rgba(183,155,232,0.3);padding-left:0.7rem;}
+  .notice b{color:var(--violet);font-weight:400;}
+  .molphase{display:flex;flex-direction:column;align-items:center;gap:0.15rem;width:100%;background:transparent;border:none;cursor:pointer;margin-top:0.8rem;padding:0.4rem;}
+  .molword{font-family:var(--f-serif);font-weight:400;font-size:1.5rem;letter-spacing:0.02em;color:var(--light);}
+  .molhint{font-family:var(--f-sans);font-size:8.5px;letter-spacing:0.12em;color:var(--faint);text-transform:uppercase;}
+  .molphase:focus-visible{outline:2px solid var(--violet);outline-offset:3px;border-radius:8px;}
+  .mollist{margin-top:0.5rem;border:1px solid var(--border);border-radius:9px;background:var(--surface);overflow:hidden;}
+  .molitem{display:flex;flex-direction:column;gap:0.15rem;padding:0.6rem 0.85rem;border-bottom:1px solid var(--border);}
+  .molitem:last-child{border-bottom:none;}
+  .molitem.cur{background:rgba(183,155,232,0.08);}
+  .molitem .mt{display:flex;justify-content:space-between;align-items:baseline;gap:0.6rem;}
+  .molitem .mn{font-family:var(--f-serif);font-size:1.15rem;color:var(--light);}
+  .molitem .mtime{font-family:var(--f-sans);font-size:10px;color:var(--violet);letter-spacing:0.03em;}
+  .molitem .md{font-size:11px;line-height:1.45;color:var(--dim);}
+
+  /* panels */
+  .panel{background:var(--deep);border:1px solid var(--border);border-radius:10px;padding:1rem 1.05rem;margin-bottom:1rem;}
+  .plabel{font-family:var(--f-sans);font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:var(--violet);display:flex;align-items:center;gap:0.6rem;margin-bottom:0.85rem;}
+  .plabel::after{content:'';flex:1;height:1px;background:rgba(183,155,232,0.16);}
+  .plabel.m{color:var(--teal);} .plabel.m::after{background:rgba(108,207,208,0.18);}
+
+  .chips{display:flex;flex-wrap:wrap;gap:0.45rem;margin-bottom:0.9rem;}
+  .chip{background:transparent;color:var(--dim);border:1px solid var(--border-b);border-radius:6px;font-family:var(--f-sans);font-size:10px;letter-spacing:0.03em;padding:0.38rem 0.7rem;cursor:pointer;transition:.18s;}
+  .chip:hover{color:var(--violet);background:rgba(183,155,232,0.08);}
+  .chip:focus-visible{outline:2px solid var(--violet);outline-offset:2px;}
+  .chip.on{color:var(--violet);border-color:var(--violet);background:rgba(183,155,232,0.1);}
+
+  .ctl{margin-bottom:0.8rem;}
+  .ctl-row{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--f-sans);font-size:10px;letter-spacing:0.03em;color:var(--dim);margin-bottom:0.3rem;}
+  .ctl-row b{color:var(--light);font-weight:400;}
+  input[type=range]{-webkit-appearance:none;width:100%;height:3px;border-radius:2px;background:rgba(120,160,220,0.2);outline:none;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--violet);cursor:pointer;box-shadow:0 0 0 3px var(--deep);}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-radius:50%;background:var(--violet);cursor:pointer;}
+  select,input[type=number]{width:100%;background:var(--surface);color:var(--light);border:1px solid var(--border-b);border-radius:6px;padding:0.4rem 0.55rem;font-family:var(--f-sans);font-size:11px;}
+  .act{width:100%;background:rgba(183,155,232,0.12);color:var(--violet);border:1px solid var(--violet);border-radius:7px;font-family:var(--f-sans);font-size:11px;letter-spacing:0.05em;padding:0.55rem;cursor:pointer;transition:.18s;margin-top:0.4rem;}
+  .act:hover{background:rgba(183,155,232,0.2);}
+  .act.ghost{background:transparent;color:var(--faint);border-color:var(--border-b);}
+  .act.ghost:hover{color:var(--animal);border-color:var(--animal);}
+
+  /* Основные способы добавить еду: крупная зона нажатия, явная иерархия и пиктограммы. */
+  .meal-ai-actions{display:grid;grid-template-columns:1fr 1fr;gap:0.55rem;margin-top:0.6rem;}
+  .meal-ai-actions>.act{min-height:62px;margin-top:0;border-radius:12px;padding-inline:0.75rem;font-weight:600;line-height:1.35;}
+  .entry-action{position:relative;isolation:isolate;display:flex;align-items:center;gap:0.7rem;width:100%;
+    min-height:62px;border-radius:12px;padding:0.65rem 0.75rem;font-family:var(--f-sans);text-align:left;
+    cursor:pointer;overflow:hidden;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;}
+  .entry-action::after{content:'';position:absolute;z-index:-1;width:90px;height:90px;border-radius:50%;
+    right:-42px;top:-52px;background:rgba(255,255,255,0.13);transition:transform .22s ease;}
+  .entry-action:hover{transform:translateY(-1px);}
+  .entry-action:hover::after{transform:scale(1.2);}
+  .entry-action:active{transform:translateY(0) scale(.99);}
+  .entry-action:focus-visible{outline:3px solid rgba(49,85,92,0.24);outline-offset:3px;}
+  .entry-icon{display:grid;place-items:center;flex:none;width:38px;height:38px;border-radius:10px;}
+  .entry-icon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;
+    stroke-linecap:round;stroke-linejoin:round;}
+  .entry-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:0.05rem;line-height:1.25;}
+  .entry-copy strong{font-size:12px;font-weight:650;letter-spacing:0.01em;}
+  .entry-copy small{font-size:9px;font-weight:450;line-height:1.35;opacity:.78;}
+  .entry-chevron{flex:none;font-size:18px;line-height:1;opacity:.72;transition:transform .18s ease;}
+  .entry-action:hover .entry-chevron{transform:translateX(2px);}
+  .photo-action{border:1px solid rgba(35,76,83,.72);color:#fff;
+    background:linear-gradient(135deg,#31555C 0%,#46777B 100%);
+    box-shadow:0 8px 20px rgba(49,85,92,.20),inset 0 1px rgba(255,255,255,.16);}
+  .photo-action .entry-icon{background:rgba(255,255,255,.14);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);}
+  .barcode-action{margin-top:0.55rem;border:1px solid rgba(176,128,63,.38);color:#775224;
+    background:linear-gradient(135deg,rgba(176,128,63,.13),rgba(255,255,255,.58));
+    box-shadow:0 5px 16px rgba(119,82,36,.08);}
+  .barcode-action::after{background:rgba(176,128,63,.10);}
+  .barcode-action:hover{border-color:rgba(176,128,63,.68);box-shadow:0 8px 20px rgba(119,82,36,.12);}
+  .barcode-action .entry-icon{color:#8A612C;background:rgba(176,128,63,.13);box-shadow:inset 0 0 0 1px rgba(176,128,63,.12);}
+  @media(max-width:430px){.meal-ai-actions{grid-template-columns:1fr}.entry-action{min-height:60px;}}
+
+  /* KBJU */
+  .kb{display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;text-align:center;background:var(--surface);border:1px solid rgba(108,207,208,0.24);border-radius:8px;padding:0.8rem 0.6rem;}
+  .kb .n{font-family:var(--f-serif);font-size:1.4rem;line-height:1;color:var(--light);}
+  .kb .rng{font-family:var(--f-sans);font-size:8px;color:var(--faint);margin-top:0.15rem;}
+  .kb .u{font-family:var(--f-sans);font-size:7.5px;letter-spacing:0.12em;color:var(--faint);text-transform:uppercase;margin-top:0.15rem;}
+  .microrow{display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.6rem;}
+  .micro{font-family:var(--f-sans);font-size:9px;color:var(--dim);background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:0.28rem 0.5rem;}
+  .micro b{color:var(--light);font-weight:400;}
+
+  /* axes */
+  .axis{margin-top:0.75rem;}
+  .axis-h{display:flex;justify-content:space-between;font-family:var(--f-sans);font-size:9.5px;color:var(--dim);margin-bottom:0.28rem;}
+  .axis-h b{font-weight:400;}
+  .trk{position:relative;height:16px;border-radius:4px;background:var(--surface);border:1px solid var(--border);overflow:hidden;}
+  .trk::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(93,184,154,0.12),rgba(200,169,110,0.08) 50%,rgba(212,122,93,0.12));}
+  .bnd{position:absolute;top:0;bottom:0;background:rgba(232,217,192,0.1);border-left:1px solid rgba(232,217,192,0.2);border-right:1px solid rgba(232,217,192,0.2);}
+  .mk{position:absolute;top:50%;width:9px;height:9px;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 2px var(--deep);}
+
+  /* fuel + targets */
+  .bar{position:relative;height:14px;border-radius:4px;background:var(--surface);border:1px solid var(--border);overflow:hidden;margin-top:0.3rem;}
+  .bar-fill{position:absolute;top:0;bottom:0;left:0;border-radius:4px;}
+  .bar-mk{position:absolute;top:0;bottom:0;width:2px;background:var(--light);}
+  .poles{display:flex;justify-content:space-between;font-family:var(--f-sans);font-size:8px;color:var(--faint);margin-top:0.25rem;}
+
+  .kv2{display:flex;justify-content:space-between;font-family:var(--f-sans);font-size:10.5px;color:var(--dim);padding:0.3rem 0;border-bottom:1px solid var(--border);}
+  .kv2[hidden]{display:none;}
+  .kv2:last-child{border-bottom:none;}
+  .kv2 b{color:var(--light);font-weight:400;}
+  .tag{font-family:var(--f-sans);font-size:8px;letter-spacing:0.05em;padding:0.05rem 0.35rem;border-radius:3px;text-transform:uppercase;}
+  .tag.est{color:var(--gold);border:1px solid rgba(232,200,122,0.4);}
+  .tag.ill{color:var(--violet);border:1px solid rgba(183,155,232,0.4);}
+  .tag.dev{color:var(--teal);border:1px solid rgba(108,207,208,0.4);}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;}
+  .meals-list{margin-top:0.7rem;display:flex;flex-direction:column;gap:0.35rem;}
+  .meal-row{display:flex;align-items:center;gap:0.5rem;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:0.4rem 0.55rem;}
+  .meal-row .mtxt{flex:1;font-family:var(--f-sans);font-size:10px;color:var(--dim);line-height:1.35;}
+  .meal-row .mtxt b{color:var(--light);font-weight:400;}
+  .meal-btn{flex:none;width:24px;height:24px;border-radius:6px;border:1px solid var(--border-b);background:transparent;color:var(--dim);cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;transition:.15s;}
+  .meal-btn:hover{color:var(--violet);border-color:var(--violet);}
+  .meal-btn.del:hover{color:var(--animal);border-color:var(--animal);}
+  .meals-empty{font-family:var(--f-sans);font-size:9px;color:var(--faint);padding:0.2rem 0;}
+  .lc{margin-top:0.9rem;border:1px dashed var(--border-b);border-radius:8px;padding:0.7rem 0.8rem;}
+  .lc-head{display:flex;justify-content:space-between;align-items:center;gap:0.6rem;font-family:var(--f-sans);font-size:10px;color:var(--dim);}
+  .lc-toggle{flex:none;background:transparent;border:1px solid var(--border-b);color:var(--faint);border-radius:6px;font-family:var(--f-sans);font-size:9px;letter-spacing:0.06em;padding:0.3rem 0.6rem;cursor:pointer;transition:.15s;}
+  .lc-toggle[aria-pressed="true"]{color:var(--plant);border-color:var(--plant);background:rgba(93,184,154,0.1);}
+  .week{display:flex;justify-content:space-between;align-items:flex-end;gap:0.35rem;height:118px;}
+  .wcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:0.3rem;cursor:pointer;height:100%;justify-content:flex-end;}
+  .wbar-track{width:100%;flex:1;display:flex;align-items:flex-end;justify-content:center;position:relative;}
+  .wbar-track::before{content:'';position:absolute;left:0;right:0;bottom:56%;border-top:1px dashed rgba(232,217,192,0.22);} /* ~ норма */
+  .wbar{width:66%;max-width:20px;border-radius:3px 3px 0 0;transition:height .3s,background .3s;}
+  .wdot{width:8px;height:8px;border-radius:50%;flex:none;}
+  .wday{font-family:var(--f-sans);font-size:9px;letter-spacing:0.03em;color:var(--faint);}
+  .wcol.cur .wday{color:var(--violet);}
+  .wcol.sel .wbar{outline:1px solid var(--violet);outline-offset:1px;}
+  .wcol.empty{cursor:default;opacity:.52;}
+  .wcol.empty .wbar{height:2px!important;background:var(--border-b)!important;}
+  .wcol.empty .wdot{background:transparent!important;border:1px solid var(--border-b);}
+  .wlegend{display:flex;flex-direction:column;gap:0.2rem;font-family:var(--f-sans);font-size:8.5px;color:var(--faint);margin-top:0.6rem;}
+  .wlegend span{display:flex;align-items:center;gap:0.35rem;}
+  .week-detail{font-family:var(--f-sans);font-size:10px;color:var(--dim);margin-top:0.5rem;min-height:1.2em;}
+  .mass-note{font-family:var(--f-sans);font-size:8.5px;line-height:1.45;color:var(--faint);letter-spacing:0.02em;margin-top:0.25rem;max-width:44ch;}
+  .rings{display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:0.9rem;}
+  .ring-cell{display:flex;flex-direction:column;align-items:center;gap:0.2rem;cursor:pointer;padding:0.2rem;border-radius:8px;transition:background .15s;}
+  .ring-cell:hover{background:rgba(183,155,232,0.06);}
+  .ring-svg{width:100%;max-width:58px;height:auto;display:block;}
+  .ring-pct{font-family:var(--f-sans);font-size:11px;fill:var(--light);}
+  .ring-label{font-family:var(--f-sans);font-size:8.5px;letter-spacing:0.02em;color:var(--dim);text-align:center;}
+  .ring-val{font-family:var(--f-sans);font-size:8px;color:var(--faint);text-align:center;}
+  .ring-sub{font-family:var(--f-sans);font-size:8.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--faint);margin-top:1rem;text-align:center;}
+  .info-chips{display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.9rem;}
+  .ichip{background:var(--surface);border:1px solid var(--border);border-radius:6px;font-family:var(--f-sans);font-size:10px;color:var(--dim);padding:0.4rem 0.6rem;cursor:pointer;transition:.15s;}
+  .ichip:hover{border-color:var(--violet);color:var(--violet);}
+  .ichip b{color:var(--light);font-weight:400;}
+  .modal-ov{position:fixed;inset:0;background:rgba(3,5,10,0.82);display:flex;align-items:center;justify-content:center;padding:1.2rem;z-index:50;}
+  .modal-ov[hidden]{display:none;}
+  .modal{position:relative;background:var(--deep);border:1px solid var(--border-b);border-radius:14px;padding:1.6rem 1.4rem 1.4rem;max-width:360px;width:100%;max-height:88vh;overflow-y:auto;}
+  .modal-x{position:absolute;top:0.7rem;right:0.8rem;background:transparent;border:none;color:var(--faint);font-size:20px;cursor:pointer;line-height:1;}
+  .modal-x:hover{color:var(--light);}
+  .m-ring{display:flex;justify-content:center;margin-bottom:0.8rem;}
+  .m-ring svg{width:120px;height:120px;}
+  .m-title{font-family:var(--f-serif);font-size:1.5rem;text-align:center;color:var(--light);margin-bottom:0.2rem;}
+  .m-val{font-family:var(--f-sans);font-size:11px;text-align:center;color:var(--dim);margin-bottom:0.9rem;}
+  .m-val b{color:var(--light);font-weight:400;}
+  .m-src{font-family:var(--f-sans);font-size:12.5px;line-height:1.55;color:var(--dim);border-left:2px solid rgba(183,155,232,0.3);padding-left:0.8rem;margin-bottom:1rem;}
+  .m-src .m-src-cap{font-family:var(--f-sans);font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--bh);display:block;margin-bottom:0.3rem;}
+  .site-btn{display:block;text-align:center;font-family:var(--f-sans);font-size:11px;letter-spacing:0.05em;text-decoration:none;border-radius:8px;padding:0.6rem;transition:.18s;}
+  .site-btn.shop{background:rgba(232,200,122,0.12);border:1px solid rgba(232,200,122,0.4);color:var(--gold);}
+  .site-btn.shop:hover{background:rgba(232,200,122,0.2);}
+  .site-btn.zdorov{max-width:760px;margin:1rem auto 0;background:rgba(93,184,154,0.1);border:1px solid rgba(93,184,154,0.4);color:var(--plant);}
+  .site-btn.zdorov:hover{background:rgba(93,184,154,0.18);}
+  .foot{font-family:var(--f-sans);font-size:9px;letter-spacing:0.1em;color:var(--faint);text-align:center;margin-top:1.5rem;}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="grid">
+    <!-- STAGE -->
+    <div class="stage">
+      <div class="canvas-wrap"><canvas id="c"></canvas></div>
+      <button class="molphase" id="molBtn" aria-expanded="false">
+        <span class="molword" id="molWord">—</span>
+        <span class="molhint">молекулярная фаза · тап для списка</span>
+      </button>
+      <div class="mollist" id="molList" hidden></div>
+      <div style="text-align:center;margin-top:0.7rem">
+        <button class="info-btn" data-info-text="legend" title="что показывает тороид" aria-label="что показывает тороид">i</button>
+        <span class="tiny" style="font-family:var(--f-sans);color:var(--faint);margin-left:0.4rem">что показывает тороид · метафора, не измерение</span>
+      </div>
+    </div>
+
+    <!-- CONTROLS + READOUTS -->
+    <div class="cols">
+      <!-- MEAL DRAFT -->
+      <div class="panel">
+        <div class="plabel">оценка по фото или тексту · ИИ</div>
+        <textarea id="aiDesc" rows="2" placeholder="Опишите блюдо и порцию: например, «гречка с курицей, 300 г»"
+          style="width:100%;background:var(--surface);color:var(--light);border:1px solid var(--border-b);border-radius:7px;padding:0.5rem 0.6rem;font-family:var(--f-sans);font-size:12px;resize:vertical;"></textarea>
+        <div class="meal-ai-actions">
+          <button class="act" id="aiText">Оценить по описанию</button>
+          <button class="entry-action photo-action" id="aiPhotoBtn">
+            <span class="entry-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8.5h3l1.5-2h7l1.5 2h3v10H4z"/><circle cx="12" cy="13.5" r="3.25"/></svg></span>
+            <span class="entry-copy"><strong>Фото блюда</strong><small>Снять или выбрать</small></span>
+            <span class="entry-chevron" aria-hidden="true">›</span>
+          </button>
+        </div>
+        <button class="entry-action barcode-action" id="barBtn">
+          <span className="entry-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><rect x="2.5" y="2.5" width="19" height="19" rx="4.5" fill="#171717"/><rect x="6" y="6" width="12" height="12" rx="2" fill="#fff"/><path d="M8.4 12.3l2.5 2.5 4.7-5.1" fill="none" stroke="#2FA94F" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="entry-copy"><strong>Ввести штрих-код упаковки</strong><small>Сканировать камерой или ввести цифры</small></span>
+          <span class="entry-chevron" aria-hidden="true">›</span>
+        </button>
+        <button class="act" id="manualBtn" style="width:100%;margin-top:0.4rem">Ввести вручную (без ИИ)</button>
+        <input type="file" id="aiPhoto" accept="image/*" capture="environment" hidden>
+        <div id="aiNote" class="kv2" style="border:none;color:var(--faint);font-size:10px" hidden><span></span></div>
+
+        <div class="ctl" style="margin-top:0.9rem">
+          <div class="ctl-row"><span>время приёма</span><b id="hourLbl">—</b></div>
+          <input type="range" id="hour" min="0" max="1435" step="5" value="480">
+          <div class="ctl-row" style="margin-top:0.2rem;color:var(--faint);font-size:9.5px"><span>по умолчанию — текущее время; сдвиньте, чтобы записать на другое время (шаг 5 мин)</span></div>
+        </div>
+        <div class="meals-list" id="mealsList"></div>
+
+        <div style="margin-top:1rem" class="plabel m" id="kbjuLbl">оценка по фото · с диапазоном</div>
+        <div class="kb">
+          <div><div class="n" id="kcal">—</div><div class="rng" id="kcalR"></div><div class="u">ккал</div></div>
+          <div><div class="n" id="prot">—</div><div class="rng" id="protR"></div><div class="u">белки</div></div>
+          <div><div class="n" id="fat">—</div><div class="rng" id="fatR"></div><div class="u">жиры</div></div>
+          <div><div class="n" id="carb">—</div><div class="rng" id="carbR"></div><div class="u">углев.</div></div>
+        </div>
+        <div class="rings" id="macroRings"></div>
+        <div class="ring-sub" id="microLabel">нутриенты · только когда они есть в данных продукта</div>
+        <div class="rings" id="microRings"></div>
+        <div class="info-chips" id="microChips">
+          <button class="ichip" data-info="asugar">доб. сахар <b id="asugar">—</b> г</button>
+          <button class="ichip" data-info="nutri">Nutri-Score <b id="nutri">—</b></button>
+        </div>
+
+        <div class="axis"><div class="axis-h"><span>промышленная обработка</span><b class="cf" id="procCf"></b></div><div class="trk"><div class="bnd" id="procB"></div><div class="mk" id="procM"></div></div></div>
+        <div class="axis"><div class="axis-h"><span>цельность · полнота</span><b class="cf" id="wholeCf"></b></div><div class="trk"><div class="bnd" id="wholeB"></div><div class="mk" id="wholeM"></div></div></div>
+        <div class="axis" id="glyAxis"><div class="axis-h"><span>гликемия · созвучие</span><b class="cf" id="glyCf"></b></div><div class="trk"><div class="bnd" id="glyB"></div><div class="mk" id="glyM"></div></div></div>
+
+        <div class="kv2" style="margin-top:0.7rem"><span>пищеварительная нагрузка сейчас</span><span><b id="digestNow">0%</b> · <span id="digestCat">нет</span></span></div>
+        <div class="kv2" id="glRow"><span>гликемическая нагрузка (GL)</span><span><b id="gl">—</b> · <span id="glCat"></span></span></div>
+        <div style="margin-top:0.5rem"><div class="axis-h"><span>топливо · цикл Рендла</span><span class="tag ill">модель</span></div>
+          <div class="bar"><div class="bar-fill" id="fuelFill"></div><div class="bar-mk" id="fuelMk"></div></div>
+          <div class="poles"><span>жир</span><span id="fuelLbl"></span><span>глюкоза</span></div>
+        </div>
+      </div>
+
+      <!-- ACTIVITY -->
+      <div class="panel">
+        <div class="plabel">активность и расход</div>
+        <div class="grid2">
+          <div><div class="ctl-row"><span>тип</span></div>
+            <select id="actType">
+              <option value="walk_brisk">ходьба (бодро)</option>
+              <option value="walk_low">ходьба (спокойно)</option>
+              <option value="run">бег</option>
+              <option value="cycling">велосипед</option>
+              <option value="strength">силовая</option>
+              <option value="hiit">интервальная (HIIT)</option>
+              <option value="yoga">йога</option>
+            </select>
+          </div>
+          <div><div class="ctl-row"><span>интенсивность</span></div>
+            <div class="chips" id="intChips" style="margin-bottom:0">
+              <button class="chip" data-i="low">низкая</button>
+              <button class="chip on" data-i="moderate">умеренная</button>
+              <button class="chip" data-i="high">высокая</button>
+            </div>
+          </div>
+        </div>
+        <div class="ctl" style="margin-top:0.6rem">
+          <div class="ctl-row"><span>длительность</span><b id="durLbl">30 мин</b></div>
+          <input type="range" id="dur" min="5" max="120" step="5" value="30">
+        </div>
+        <div class="ctl">
+          <div class="ctl-row"><span>время начала</span><b id="ahourLbl">13:00</b></div>
+          <input type="range" id="ahour" min="0" max="23" step="1" value="13">
+        </div>
+        <button class="act" id="addAct">Добавить активность вручную</button>
+        <div class="chips" style="margin-top:0.6rem">
+          <button class="chip" id="track10k">трекер: 10 000 шагов</button>
+          <button class="chip" id="track30">трекер: пробежка 30 мин</button>
+        </div>
+        <div class="meals-list" id="actsList"></div>
+        <div class="kv2" style="margin-top:0.6rem"><span>расход за день</span><span><b id="expend">0</b> ккал <span class="tag est">оценка</span></span></div>
+        <div class="kv2"><span>записей активности</span><span><b id="actCount">0</b></span></div>
+        <div class="kv2" id="overlapNote" style="border:none;color:var(--faint);font-size:9px" hidden><span>время активностей выстроено последовательно, без наложения (перекрытие не задваивается)</span></div>
+      </div>
+
+      <!-- DAY ORIENTIRS (профиль и замеры — во вкладке «Динамика») -->
+      <div class="panel">
+        <div class="plabel">день · ориентиры <button class="info-btn" data-info-text="profile" title="откуда ориентиры" aria-label="откуда ориентиры">i</button></div>
+        <div class="kv2" style="margin-top:0.2rem"><span>ориентир потребности (TDEE)</span><span><b id="tdee">—</b> ккал <span class="tag est">оценка</span></span></div>
+        <div class="kv2"><span>приход за день</span><span><b id="intake">0</b> ккал</span></div>
+        <div class="kv2"><span>расход (активности)</span><span><b id="expend2">0</b> ккал</span></div>
+        <div class="kv2"><span>цель по калориям</span><span id="calGoal">—</span></div>
+        <div class="kv2"><span>направление к ориентиру</span><span id="direction">—</span></div>
+
+        <div class="lc">
+          <div class="lc-head"><span>плавный переход на низкоуглеводное <button class="info-btn" data-info-text="lowcarb" title="о переходе" aria-label="о переходе">i</button></span>
+            <button class="lc-toggle" id="lcToggle" aria-pressed="false">выкл</button></div>
+          <div id="lcBody" hidden>
+            <div class="ctl" style="margin-top:0.5rem">
+              <div class="ctl-row"><span>неделя перехода</span><b id="lcWeekLbl">1 из 8</b></div>
+              <input type="range" id="lcWeek" min="1" max="8" step="1" value="1">
+            </div>
+            <div class="kv2"><span>цель углеводов</span><span><b id="lcGoal">—</b> г/день</span></div>
+            <div class="kv2"><span>углеводы сегодня</span><span id="lcToday">—</span></div>
+          </div>
+        </div>
+
+        <button class="act ghost" id="clearDay" style="margin-top:0.9rem">Очистить день</button>
+      </div>
+
+      <div class="panel">
+        <div class="plabel">неделя по дням <button class="info-btn" data-info-text="week" title="о графике недели" aria-label="о графике недели">i</button></div>
+        <div class="week" id="week"></div>
+        <div class="week-detail" id="weekDetail">тап по дню — клетчатка и детали</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">измеримое — отдельно · оценка — с диапазоном · направление — не приговор</div>
+  <a class="site-btn zdorov" href="https://zdorov.life" target="_blank" rel="noopener">о здоровье — zdorov.life →</a>
+</div>
+
+<div class="modal-ov" id="modalOv" hidden>
+  <div class="modal">
+    <button class="modal-x" id="modalX" aria-label="закрыть">×</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ---------- utils ---------- */
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const map=(x,a,b,c,d)=>c+(d-c)*((x-a)/(b-a));
+const wrap2pi=a=>((a%(2*Math.PI))+2*Math.PI)%(2*Math.PI);
+const TAU=Math.PI*2;
+// Любые строки от пользователя, внешней базы или LLM перед вставкой в HTML
+// экранируются. Для обычного текста предпочтителен textContent.
+function htmlEscape(value){return String(value??'').replace(/[&<>"']/g,ch=>({
+  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+}[ch]));}
+function hexRgb(h){h=h.replace('#','');return{r:parseInt(h.slice(0,2),16),g:parseInt(h.slice(2,4),16),b:parseInt(h.slice(4,6),16)};}
+function shade(h,k){const c=hexRgb(h);return`rgb(${clamp(c.r*k,0,255)|0},${clamp(c.g*k,0,255)|0},${clamp(c.b*k,0,255)|0})`;}
+function mix(h1,h2,t){const a=hexRgb(h1),b=hexRgb(h2);const m=(x,y)=>Math.round(x+(y-x)*t);return`rgb(${m(a.r,b.r)},${m(a.g,b.g)},${m(a.b,b.b)})`;}
+
+/* ---------- SunCalc core (MIT, V. Agafonkin, trimmed) ---------- */
+const Sun=(function(){
+  const rad=Math.PI/180,dayMs=864e5,J1970=2440588,J2000=2451545,e=rad*23.4397,PI=Math.PI;
+  const toJ=d=>d.valueOf()/dayMs-0.5+J1970, toDays=d=>toJ(d)-J2000;
+  const ra=(l,b)=>Math.atan2(Math.sin(l)*Math.cos(e)-Math.tan(b)*Math.sin(e),Math.cos(l));
+  const dec=(l,b)=>Math.asin(Math.sin(b)*Math.cos(e)+Math.cos(b)*Math.sin(e)*Math.sin(l));
+  const sma=d=>rad*(357.5291+0.98560028*d);
+  const ecl=M=>M+rad*(1.9148*Math.sin(M)+0.02*Math.sin(2*M)+0.0003*Math.sin(3*M))+rad*102.9372+PI;
+  const J0=0.0009;
+  const cyc=(d,lw)=>Math.round(d-J0-lw/TAU);
+  const approx=(Ht,lw,n)=>J0+(Ht+lw)/TAU+n;
+  const transit=(ds,M,L)=>J2000+ds+0.0053*Math.sin(M)-0.0069*Math.sin(2*L);
+  const ha=(h,phi,d)=>Math.acos((Math.sin(h)-Math.sin(phi)*Math.sin(d))/(Math.cos(phi)*Math.cos(d)));
+  const fromJ=j=>new Date((j+0.5-J1970)*dayMs);
+  function coords(d){const M=sma(d),L=ecl(M);return{dec:dec(L,0),ra:ra(L,0)};}
+  return{
+    getTimes(date,lat,lng){
+      const lw=rad*-lng,phi=rad*lat,d=toDays(date),n=cyc(d,lw),ds=approx(0,lw,n),
+        M=sma(ds),L=ecl(M),de=dec(L,0),Jn=transit(ds,M,L),h0=-0.833*rad;
+      let w;try{w=ha(h0,phi,de);}catch(x){w=NaN;}
+      const Jset=transit(approx(w,lw,n),M,L),Jrise=Jn-(Jset-Jn);
+      return{sunrise:fromJ(Jrise),sunset:fromJ(Jset),solarNoon:fromJ(Jn)};
+    },
+    moonPhase(date){
+      const d=toDays(date),s=coords(d),
+        L=rad*(218.316+13.176396*d),M=rad*(134.963+13.064993*d),F=rad*(93.272+13.229350*d),
+        l=L+rad*6.289*Math.sin(M),b=rad*5.128*Math.sin(F),dt=385001-20905*Math.cos(M),
+        mdec=dec(l,b),mra=ra(l,b),sd=149598000,
+        phi=Math.acos(Math.sin(s.dec)*Math.sin(mdec)+Math.cos(s.dec)*Math.cos(mdec)*Math.cos(s.ra-mra)),
+        inc=Math.atan2(sd*Math.sin(phi),dt-sd*Math.cos(phi)),
+        ang=Math.atan2(Math.cos(s.dec)*Math.sin(s.ra-mra),Math.sin(s.dec)*Math.cos(mdec)-Math.cos(s.dec)*Math.sin(mdec)*Math.cos(s.ra-mra));
+      return 0.5+0.5*inc*(ang<0?-1:1)/PI;
+    }
+  };
+})();
+const GEO={lat:55.0,lng:clamp(-new Date().getTimezoneOffset()/4,-180,180)}; // долгота из часового пояса телефона
+
+/* ---------- domain data ---------- */
+/* two visual phases: light day (07–14) ↔ dark night, smooth gradient */
+const DAY_HEX='#e8c87a', NIGHT_HEX='#463c78';
+const DAY_RGB=hexRgb(DAY_HEX), NIGHT_RGB=hexRgb(NIGHT_HEX);
+function smoothstep(a,b,x){const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);}
+function dayWeight(h){const D=1.2;return clamp(smoothstep(7-D,7+D,h)-smoothstep(14-D,14+D,h),0,1);} // 1=day
+function dayRGB(h){const t=dayWeight(h);return{r:NIGHT_RGB.r+(DAY_RGB.r-NIGHT_RGB.r)*t,g:NIGHT_RGB.g+(DAY_RGB.g-NIGHT_RGB.g)*t,b:NIGHT_RGB.b+(DAY_RGB.b-NIGHT_RGB.b)*t};}
+function mixRGB(a,b,t){return{r:a.r+(b.r-a.r)*t,g:a.g+(b.g-a.g)*t,b:a.b+(b.b-a.b)*t};}
+function shadeRGB(c,k){return`rgb(${clamp(c.r*k,0,255)|0},${clamp(c.g*k,0,255)|0},${clamp(c.b*k,0,255)|0})`;}
+
+/* molecular circadian clock phases (TTFL), distributed by daylight length */
+const MOL=[
+  {name:'Активация', desc:'CLOCK–BMAL1 включает гены PER, CRY и множество генов обмена веществ'},
+  {name:'Накопление',desc:'белки PER и CRY постепенно накапливаются в цитоплазме'},
+  {name:'Торможение',desc:'PER–CRY входят в ядро и подавляют CLOCK–BMAL1 — собственное производство временно выключается'},
+  {name:'Распад',    desc:'PER и CRY разрушаются, торможение снимается, начинается новый цикл'}
+];
+function molWindows(now){
+  const tt=Sun.getTimes(now,GEO.lat,GEO.lng);
+  let sr=tt.sunrise.getHours()+tt.sunrise.getMinutes()/60;
+  let ss=tt.sunset.getHours()+tt.sunset.getMinutes()/60;
+  if(isNaN(sr)||isNaN(ss)){sr=7;ss=19;}
+  let dayLen=ss-sr; if(dayLen<=0)dayLen+=24; dayLen=clamp(dayLen,1,23);
+  const nightLen=24-dayLen;
+  // continuous scale [sr, sr+24): day = activation+accumulation, night = inhibition+decay
+  return [
+    {i:0,start:sr,            end:sr+dayLen/2},
+    {i:1,start:sr+dayLen/2,   end:ss},
+    {i:2,start:ss,            end:ss+nightLen/2},
+    {i:3,start:ss+nightLen/2, end:sr+24}
+  ];
+}
+function currentMolIndex(now){
+  const w=molWindows(now);let h=now.getHours()+now.getMinutes()/60;
+  if(h<w[0].start)h+=24;
+  for(const p of w)if(h>=p.start&&h<p.end)return p.i;
+  return 3;
+}
+// молекулярная фаза для произвольного часа приёма
+function molIndexForHour(h){
+  const w=molWindows(state.now);let hh=h;if(hh<w[0].start)hh+=24;
+  for(const p of w)if(hh>=p.start&&hh<p.end)return p.i;
+  return 3;
+}
+// эвристический сценарий влияния фазы на массу (термический эффект и инсулиночувствительность выше утром):
+// [активация, накопление, торможение, распад] — множитель «эффективных» калорий приёма
+function fmtH(x){const tm=((Math.round(x*60)%1440)+1440)%1440;const H=Math.floor(tm/60),M=tm%60;return String(H).padStart(2,'0')+':'+String(M).padStart(2,'0');}
+const DISHES={
+  oatmeal:{name:'овсянка',kcal:290,p:9,f:6,c:51,fiber:7,sodium:5,asugar:4,pot:250,mag:110,gi:55,nutri:'A',
+    proc:{pos:0.12,cf:'высокая'},whole:{pos:0.15,cf:'высокая'},gly:{pos:0.32,cf:'средняя'}},
+  salad:{name:'салат',kcal:340,p:28,f:20,c:12,fiber:6,sodium:620,asugar:1,pot:700,mag:70,gi:25,nutri:'B',
+    proc:{pos:0.10,cf:'высокая'},whole:{pos:0.18,cf:'высокая'},gly:{pos:0.15,cf:'высокая'}},
+  bread:{name:'хлеб+джем',kcal:260,p:5,f:3,c:52,fiber:2,sodium:380,asugar:20,pot:90,mag:20,gi:70,nutri:'D',
+    proc:{pos:0.55,cf:'средняя'},whole:{pos:0.75,cf:'высокая'},gly:{pos:0.80,cf:'высокая'}},
+  junk:{name:'газировка+чипсы',kcal:480,p:4,f:22,c:65,fiber:3,sodium:640,asugar:45,pot:350,mag:40,gi:65,nutri:'E',
+    proc:{pos:0.92,cf:'высокая'},whole:{pos:0.90,cf:'высокая'},gly:{pos:0.85,cf:'средняя'}}
+};
+const MET={walk_low:2.8,walk_brisk:3.8,run:9.8,cycling:7.0,strength:5.0,hiit:9.0,yoga:2.5};
+const NUTRI_COLOR={A:'#3f8f4f',B:'#7db33f',C:'#e8c84a',D:'#e0824a',E:'#d4553d'};
+const NUTRI_N={A:1,B:2,C:3,D:4,E:5};
+function nutriLetter(n){return ['','A','B','C','D','E'][clamp(Math.round(n),1,5)];}
+const CF={'высокая':0.85,'средняя':0.55,'низкая':0.30};
+
+const PROCESSING_MODEL_VERSION=2;
+const PROCESSING_TERMS={
+  ultra:['газиров','чипс','наггет','фастфуд','лапша быстр','сухарик','энергетик','конфет','батончик','плавлен','заменитель молочного жира'],
+  processed:['колбас','сосиск','ветчин','копч','консерв','майонез','готовый соус','печенье','выпечк'],
+  minimal:['яич','яйц','зелень','овощ','салат','рыб','куриц','индей','мяс','греч','рис','овся','творог','фрукт','ягод','орех','гриб'],
+};
+function estimateProcessing(name,confidence){
+  const s=String(name||'').toLowerCase();
+  const has=terms=>terms.some(x=>s.includes(x));
+  const pos=has(PROCESSING_TERMS.ultra)?0.9:has(PROCESSING_TERMS.processed)?0.67:has(PROCESSING_TERMS.minimal)?0.2:0.35;
+  const cf=Number(confidence)>=0.75?'средняя':'низкая'; // уверенность КБЖУ не равна уверенности NOVA-класса
+  return{pos,cf};
+}
+function estimateDigestion(m){return clamp(1.5+m.kcal/400+m.f*0.03+m.p*0.02+m.fiber*0.04,1.5,5);}
+// Текущая пищеварительная нагрузка — отдельная от промышленной обработки эвристика 0..1.
+// Энергия задаёт основу, жир/белок/клетчатка/углеводы уточняют длительность и выраженность.
+function digestiveLoad(m){
+  return clamp(0.35*clamp(m.kcal/700,0,1)+0.30*clamp(m.f/35,0,1)+0.15*clamp(m.p/45,0,1)
+    +0.10*clamp(m.fiber/15,0,1)+0.10*clamp(m.c/100,0,1),0.04,1);
+}
+function mealTimestamp(hour,now=new Date()){
+  const d=new Date(now);const total=Math.round(Number(hour||0)*60);
+  d.setHours(Math.floor(total/60)%24,total%60,0,0);
+  // После полуночи время 23:xx относится к предыдущему вечеру, а не к будущему дню.
+  if(d.getTime()-now.getTime()>6*60*60*1000)d.setDate(d.getDate()-1);
+  return d.getTime();
+}
+function ensureMealModel(m){
+  if(!m||typeof m!=='object')return m;
+  if(!Number.isFinite(m.eatenAt))m.eatenAt=mealTimestamp(m.hour,state.now);
+  if(!Number.isFinite(m.digestionH)||m.digestionH<=0)m.digestionH=estimateDigestion(m);
+  if(m.source!=='barcode'&&m.processingVersion!==PROCESSING_MODEL_VERSION){
+    m.proc=estimateProcessing(m.name,m.confidence);m.processingVersion=PROCESSING_MODEL_VERSION;
+  }
+  return m;
+}
+function digestionActivityAt(m,now=state.now){
+  ensureMealModel(m);
+  const elapsed=(now.getTime()-m.eatenAt)/60000,duration=m.digestionH*60;
+  if(elapsed<0||elapsed>duration)return 0;
+  // Первые 15% окна — плато, затем мягкое затухание до нуля.
+  return 1-smoothstep(0.15,1,elapsed/duration);
+}
+function digestionNoiseNow(now=state.now){
+  let quiet=1;
+  for(const m of state.meals)quiet*=1-clamp(digestiveLoad(m)*digestionActivityAt(m,now),0,0.95);
+  return clamp(1-quiet,0,1);
+}
+function dayProcessingScore(){let s=0,w=0;for(const m of state.meals){s+=(m.proc?m.proc.pos:0.35)*m.kcal;w+=m.kcal;}return w>0?s/w:0;}
+// Визуальная нагрузка приёма; позднее время усиливает её умеренно, но не меняет класс обработки.
+function mealLoad(m){return clamp(digestiveLoad(m)*(1+0.2*(1-dayWeight(m.hour))),0,1);}
+// оценка без привязки к весу (маркировка «оценка», не персональная норма)
+function kcalFromMET(k,min){return MET[k]*(min/60);}
+function kcalFromSteps(steps,h){const stride=0.415*(h/100);return (steps*stride/1000)*50;}
+function timeToAngle(h,min=0){return((h*60+min)/1440)*TAU;}
+
+/* ---------- state ---------- */
+const state={
+  meals:[], acts:[],
+  draftDish:'oatmeal', portion:1, mealHour:(new Date()).getHours(),
+  actType:'walk_brisk', actInt:'moderate', actDur:30, actHour:13,
+  profile:{h:0,age:0,sex:'',al:1.5},
+  reminder:{on:false,weekday:1},
+  lowcarb:{on:false,week:1},
+  now:new Date()
+};
+let seedId=0;
+function makeSeeds(){const s=[];for(let i=0;i<48;i++)s.push({uOff:Math.random(),v:Math.random()*TAU,rf:0.12+Math.random()*0.74,tw:Math.random()*TAU,sp:260+Math.random()*260});return s;}
+
+function scaledMeal(dishKey,portion){
+  const d=DISHES[dishKey];
+  return{dishKey,portion,name:d.name,kcal:Math.round(d.kcal*portion),p:Math.round(d.p*portion),f:Math.round(d.f*portion),
+    c:Math.round(d.c*portion),fiber:+(d.fiber*portion).toFixed(1),sodium:Math.round(d.sodium*portion),
+    asugar:Math.round(d.asugar*portion),gi:d.gi,nutri:d.nutri,proc:d.proc,whole:d.whole,gly:d.gly,
+    pot:Math.round(d.pot*portion),mag:Math.round(d.mag*portion),
+    gl:Math.round(d.gi*d.c*portion/100)};
+}
+
+/* ---------- derived / consolidation ---------- */
+function currentIntensity(){
+  const now=state.now, nowM=now.getHours()*60+now.getMinutes();
+  for(const a of state.acts){
+    const st=a.startMin, en=st+a.dur;
+    if(nowM>=st&&nowM<=en)return a.int;
+  }
+  return null;
+}
+function activeGLnow(){
+  const now=state.now;let gl=0;
+  for(const m of state.meals)gl+=m.gl*digestionActivityAt(m,now);
+  return gl;
+}
+function hoursFasted(){
+  if(!state.meals.length)return 12;
+  const now=state.now.getTime();let last=0;
+  for(const m of state.meals){ensureMealModel(m);if(m.eatenAt<=now)last=Math.max(last,m.eatenAt);}
+  if(!last)return 0;return clamp((now-last)/3600000,0,12);
+}
+function substrateBalance(){
+  const fed=map(clamp(activeGLnow(),0,30),0,30,0.20,0.90);
+  const fast=map(hoursFasted(),0,12,0,0.50);
+  const it=currentIntensity();
+  const ex=it==='high'?0.20:it==='moderate'?-0.15:it==='low'?-0.25:0;
+  return clamp(fed-fast+ex,0,1);
+}
+// топливный баланс для выбранного (черновика) блюда: наглядно реагирует на выбор еды
+function draftSubstrate(){
+  const m=scaledMeal(state.draftDish,state.portion);
+  let s=map(clamp(m.gl,0,45),0,45,0.15,0.92);   // много углеводов → к глюкозе; мало → к жиру
+  const it=currentIntensity();
+  if(it==='high')s+=0.12; else if(it==='moderate'||it==='low')s-=0.15; // нагрузка сдвигает к жиру
+  return clamp(s,0,1);
+}
+// топливо (Рендл) от ДОБАВЛЕННЫХ приёмов дня; нет еды → к жиру (натощак). Сбрасывается при очистке дня.
+function dayFuel(){
+  let s=0,w=0;
+  for(const m of state.meals){s+=m.gl*m.kcal;w+=m.kcal;}
+  const gl=w>0?s/w:0;
+  let sub=map(clamp(gl,0,45),0,45,0.15,0.92);
+  const it=currentIntensity();
+  if(it==='high')sub+=0.12; else if(it==='moderate'||it==='low')sub-=0.15;
+  return clamp(sub,0,1);
+}
+// расход за день без задваивания: в каждую минуту учитываем только одну (самую интенсивную) активность
+function expenditure(){
+  const rate=new Array(1440).fill(0);
+  for(const a of state.acts){
+    const start=Math.max(0,a.startMin),end=Math.min(1440,a.startMin+a.dur);
+    const kpm=a.dur>0?a.kcal/a.dur:0;
+    for(let t=start;t<end;t++)if(kpm>rate[t])rate[t]=kpm;
+  }
+  let s=0;for(let t=0;t<1440;t++)s+=rate[t];
+  return s;
+}
+// есть ли пересечения по времени между активностями
+function actsOverlap(){
+  const iv=state.acts.map(a=>[a.startMin,a.startMin+a.dur]).sort((x,y)=>x[0]-y[0]);
+  for(let i=1;i<iv.length;i++)if(iv[i][0]<iv[i-1][1])return true;
+  return false;
+}
+function dayIntake(){return state.meals.reduce((s,m)=>s+m.kcal,0);}
+function dayProtein(){return state.meals.reduce((s,m)=>s+m.p,0);}
+function dayFiber(){return state.meals.reduce((s,m)=>s+m.fiber,0);}
+function dayCarbs(){return state.meals.reduce((s,m)=>s+m.c,0);}
+function dayFat(){return state.meals.reduce((s,m)=>s+m.f,0);}
+function daySodium(){return state.meals.reduce((s,m)=>s+m.sodium,0);}
+function dayPotassium(){return state.meals.reduce((s,m)=>s+(m.pot||0),0);}
+function dayMagnesium(){return state.meals.reduce((s,m)=>s+(m.mag||0),0);}
+// Ориентиры нутриентов — справочные значения ВОЗ/РДН, не персональная норма,
+// без привязки к весу/ИМТ/TDEE (ФЗ-152: состав тела — спец. категория ПДн;
+// ФЗ-323: персональные цели/дефициты — вне телемедицины).
+function hasCompleteProfile(){const p=state.profile;return p.h>=120&&p.age>=14&&(p.sex==='m'||p.sex==='f');}
+function targets(){
+  const p=state.profile;
+  const magT=p.sex==='m'?(p.age>30?420:400):(p.age>30?320:310);
+  return {
+    kcal:2200, protein:60, fat:70,
+    carb: state.lowcarb.on?70:200,
+    fiber:30, sodium:2000, potassium:3500, magnesium:magT
+  };
+}
+// ---------- еженедельное напоминание об обновлении замеров ----------
+let remTimer=null;
+function weekdayName(d){return ['воскресенье','понедельник','вторник','среду','четверг','пятницу','субботу'][d];}
+// Напоминание не собирает замеры тела (состав тела — спец. категория ПДн по ФЗ-152).
+function fireReminder(){try{if('Notification'in window&&Notification.permission==='granted')new Notification('Своя нота',{body:'Сделайте запись дня: приём и практика.'});}catch(e){}}
+function scheduleReminder(){
+  if(remTimer){clearTimeout(remTimer);remTimer=null;}
+  if(!state.reminder.on)return;
+  const now=new Date(),target=new Date(now);
+  const diff=(state.reminder.weekday-now.getDay()+7)%7;
+  target.setDate(now.getDate()+diff);target.setHours(10,0,0,0);
+  if(target<=now)target.setDate(target.getDate()+7);
+  const ms=target-now;
+  if(ms>0&&ms<2147483647)remTimer=setTimeout(()=>{fireReminder();scheduleReminder();},ms);
+}
+function renderReminder(){
+  const tg=document.getElementById('remToggle'),body=document.getElementById('remBody');
+  tg.setAttribute('aria-pressed',state.reminder.on);tg.textContent=state.reminder.on?'вкл':'выкл';
+  body.hidden=!state.reminder.on;
+  if(!state.reminder.on)return;
+  const st=document.getElementById('remStatus');
+  const notif=('Notification'in window&&Notification.permission==='granted')?' и уведомлением':'';
+  if(new Date().getDay()===state.reminder.weekday)
+    st.innerHTML='<span style="color:var(--gold)">сегодня — сделайте запись дня</span>';
+  else
+    st.innerHTML=`<span>каждую ${weekdayName(state.reminder.weekday)} · в приложении${notif}</span>`;
+}
+// Напоминание об обновлении замеров переехало в «Динамику» — обработчики убраны.
+
+// плавный переход: цель углеводов снижается от ~45% рациона к 70 г за 8 недель
+function lowcarbGoal(){
+  const start=Math.round(tdee()*0.45/4), target=70;
+  const frac=smoothstep(1,8,state.lowcarb.week);
+  return Math.round(start-(start-target)*frac);
+}
+function renderLowcarb(){
+  const body=document.getElementById('lcBody'),tg=document.getElementById('lcToggle');
+  tg.setAttribute('aria-pressed',state.lowcarb.on);tg.textContent=state.lowcarb.on?'вкл':'выкл';
+  body.hidden=!state.lowcarb.on;
+  if(!state.lowcarb.on)return;
+  document.getElementById('lcWeekLbl').textContent=state.lowcarb.week+' из 8';
+  const goal=lowcarbGoal(),today=Math.round(dayCarbs());
+  document.getElementById('lcGoal').textContent=goal;
+  const el=document.getElementById('lcToday');
+  el.textContent=today+' г '+(today<=goal?'· в цели':'· выше на '+(today-goal)+' г');
+  el.style.color=today<=goal?'var(--plant)':'var(--animal)';
+}
+
+/* ---------- кольцевые диаграммы нутриентов + информ-модалка ---------- */
+const RING_SRC={
+  kcal:{cap:'калории',src:'Справочный ориентир (~2200 ккал) — не персональная норма и не медицинская рекомендация.'},
+  protein:{cap:'белок',src:'Ориентир ~60 г/день (ВОЗ: минимум ~0.8 г/кг — не персональная норма).'},
+  fat:{cap:'жиры',src:'≈30% суточных калорий из жиров (диапазон ВОЗ 15–30%), делённые на 9 ккал/г.'},
+  carb:{cap:'углеводы',src:'≈45% калорий (диапазон ВОЗ 45–65%) ÷ 4 ккал/г. При включённом переходе — цель низкоуглеводного плана.'},
+  fiber:{cap:'клетчатка',src:'14 г на 1000 ккал (Institute of Medicine, США).'},
+  sodium:{cap:'натрий',src:'Лимит ВОЗ: менее 2000 мг натрия в день (≈5 г соли). Кольцо — доля лимита.'},
+  potassium:{cap:'калий',src:'Рекомендация ВОЗ: не менее 3500 мг калия в день.'},
+  magnesium:{cap:'магний',src:'RDA: мужчины ~400–420 мг, женщины ~310–320 мг в день (по возрасту).'},
+  asugar:{cap:'добавленный сахар',src:'ВОЗ: менее 10% калорий из свободных сахаров, желательно менее 5%. Кольцо — доля лимита 10%.'},
+  nutri:{cap:'Nutri-Score',src:'Валидированный композит: энергия, сахар, насыщенные жиры, соль (минусы) против клетчатки, белка, овощей/бобовых/орехов (плюсы). A — лучше, E — хуже.'}
+};
+function ringColor(pct,kind){
+  if(kind==='limit')return pct>1.001?'#d47a5d':'#5db89a';
+  return pct>=0.9?'#5db89a':'#c8a96e';
+}
+function ringSVG(pct,color,center,big){
+  const r=big?52:20,cx=big?64:24,circ=2*Math.PI*r,arc=Math.min(pct,1)*circ,sw=big?9:5;
+  return `<svg viewBox="0 0 ${cx*2} ${cx*2}"><circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="rgba(120,150,205,0.18)" stroke-width="${sw}"/><circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${arc.toFixed(1)} ${circ.toFixed(1)}" transform="rotate(-90 ${cx} ${cx})"/><text x="${cx}" y="${cx+(big?7:2)}" text-anchor="middle" class="ring-pct" style="font-size:${big?'22px':'11px'}">${center}</text></svg>`;
+}
+function ringList(){
+  const t=targets();
+  return [
+    {k:'kcal',label:'ккал',val:Math.round(dayIntake()),tgt:t.kcal,kind:'limit',unit:'ккал'},
+    {k:'protein',label:'белки',val:Math.round(dayProtein()),tgt:t.protein,kind:'enough',unit:'г'},
+    {k:'fat',label:'жиры',val:Math.round(dayFat()),tgt:t.fat,kind:'limit',unit:'г'},
+    {k:'carb',label:'углеводы',val:Math.round(dayCarbs()),tgt:t.carb,kind:'limit',unit:'г'},
+    {k:'fiber',label:'клетчатка',val:Math.round(dayFiber()),tgt:t.fiber,kind:'enough',unit:'г'},
+    {k:'sodium',label:'натрий',val:Math.round(daySodium()),tgt:t.sodium,kind:'limit',unit:'мг'},
+    {k:'potassium',label:'калий',val:Math.round(dayPotassium()),tgt:t.potassium,kind:'enough',unit:'мг'},
+    {k:'magnesium',label:'магний',val:Math.round(dayMagnesium()),tgt:t.magnesium,kind:'enough',unit:'мг'}
+  ];
+}
+function renderRings(){
+  const rings=ringList();
+  const cell=r=>{const pct=r.tgt>0?r.val/r.tgt:0;return `<div class="ring-cell" data-ring="${r.k}">${ringSVG(pct,ringColor(pct,r.kind),Math.round(pct*100)+'%',false)}<div class="ring-label">${r.label}</div><div class="ring-val">${r.val}/${r.tgt}</div></div>`;};
+  document.getElementById('macroRings').innerHTML=rings.slice(0,4).map(cell).join('');
+  document.getElementById('microRings').innerHTML=rings.slice(4).map(cell).join('');
+  document.querySelectorAll('.ring-cell').forEach(c=>c.addEventListener('click',()=>openInfo(c.getAttribute('data-ring'))));
+}
+function openInfo(key){
+  const meta=RING_SRC[key]||{cap:key,src:''};let body='';
+  if(key==='nutri'){
+    const m=displayMeal(),col=NUTRI_COLOR[m.nutri]||'#999';
+    body=`<div class="m-ring"><div style="width:104px;height:104px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${col};color:#03050a;font-family:var(--f-serif);font-size:3rem;">${m.nutri}</div></div><div class="m-title">${meta.cap}</div><div class="m-val">оценка рациона за день: <b>${m.nutri}</b></div>`;
+  }else if(key==='asugar'){
+    const m=displayMeal(),limitG=Math.round(targets().kcal*0.10/4),pct=limitG>0?m.asugar/limitG:0;
+    body=`<div class="m-ring">${ringSVG(pct,ringColor(pct,'limit'),Math.round(pct*100)+'%',true)}</div><div class="m-title">${meta.cap}</div><div class="m-val"><b>${m.asugar}</b> г из лимита <b>${limitG}</b> г/день</div>`;
+  }else{
+    const r=ringList().find(x=>x.k===key),pct=r.tgt>0?r.val/r.tgt:0,verb=r.kind==='limit'?'из лимита':'из нормы';
+    body=`<div class="m-ring">${ringSVG(pct,ringColor(pct,r.kind),Math.round(pct*100)+'%',true)}</div><div class="m-title">${meta.cap}</div><div class="m-val"><b>${r.val}</b> ${r.unit} ${verb} <b>${r.tgt}</b> ${r.unit}</div>`;
+  }
+  body+=`<div class="m-src"><span class="m-src-cap">источник нормы</span>${meta.src}</div>`;
+  if(key==='sodium'||key==='magnesium'||key==='potassium')
+    body+=`<a class="site-btn shop" href="https://torion.shop" target="_blank" rel="noopener">восполнить минералы — torion.shop →</a>`;
+  document.getElementById('modalBody').innerHTML=body;
+  document.getElementById('modalOv').hidden=false;
+}
+document.getElementById('modalX').addEventListener('click',()=>document.getElementById('modalOv').hidden=true);
+document.getElementById('modalOv').addEventListener('click',e=>{if(e.target.id==='modalOv')document.getElementById('modalOv').hidden=true;});
+document.querySelectorAll('.ichip').forEach(c=>c.addEventListener('click',()=>openInfo(c.getAttribute('data-info'))));
+
+/* поясняющие тексты — отдельными окнами */
+const TEXT_INFO={
+  intro:{cap:'Тороид суточного ритма',html:`<p class="mtext">Кольцо суток разделено на фазы циркадного ритма; текущая повёрнута вперёд. Приёмы пищи ложатся полосой переваривания, глюкоза — мерцающими точками, активность — холодными метками. Пульс тороида — нетто-нагрузка. В центре — солнце или луна по расчёту восхода и захода.</p><p class="mtext"><b>Метафора, не измерение.</b> Тороид показывает вычисленные (время, фаза, восход/закат) и оценённые (КБЖУ, нагрузка, топливо) величины. Он не измеряет клетки, глюкозу крови или гормоны. Это дневник наблюдения, а не наказания: важен паттерн за недели, а не одна тарелка. Не медицинская рекомендация.</p>`},
+  legend:{cap:'Что показывает тороид',html:`<p class="mtext">Голубые метки — активность. Жёлтые точки — жир, красные — глюкоза. Мерцающие точки в центре — текущая расчётная пищеварительная нагрузка: после приёма она появляется и плавно исчезает к концу оценённого окна переваривания. Амплитуда пульсации кольца меняется вместе с ней.</p><p class="mtext">Ось «промышленная обработка» — отдельная характеристика состава блюда и не определяет текущую нагрузку напрямую.</p>`},
+  mass:{cap:'Прогноз массы за день',html:`<p class="mtext">Расход = дневная нагрузка (по росту и весу) плюс активности из трекера. Учитывается фаза приёма: утро эффективнее (термический эффект и инсулиночувствительность), поздние приёмы — к набору, эвристически ±6%. Два алгоритма: Уишнофски (7700 ккал/кг) и по составу тела (Forbes). Оценка, не измерение.</p>`},
+  profile:{cap:'Откуда ориентиры дня',html:`<p class="mtext">Ориентир потребности (TDEE) и цель по калориям считаются из профиля — рост, вес, возраст, пол и дневная нагрузка. Профиль и замеры тела теперь в отдельной вкладке «Динамика»; здесь показан результат. Оценка, не медицинская рекомендация.</p>`},
+  lowcarb:{cap:'Плавный переход на низкоуглеводное',html:`<p class="mtext">Постепенное снижение углеводов за несколько недель, не резко. Один из подходов, а не медицинская рекомендация.</p>`},
+  week:{cap:'Неделя по дням',html:`<p class="mtext">Показываются только ваши сохранённые записи за последние семь календарных дней. Пустой столбец означает, что данных за этот день нет. Точка обработки отображается только там, где она действительно рассчитана.</p>`}
+};
+function openText(key){const t=TEXT_INFO[key];if(!t)return;document.getElementById('modalBody').innerHTML=`<div class="m-title">${t.cap}</div>${t.html}`;document.getElementById('modalOv').hidden=false;}
+document.querySelectorAll('.info-btn[data-info-text]').forEach(b=>b.addEventListener('click',()=>openText(b.getAttribute('data-info-text'))));
+
+/* профиль и замеры вводятся во вкладке «Динамика» и читаются отсюда из общего журнала */
+function loadProfileFromJournal(){
+  try{
+    const j=JSON.parse(localStorage.getItem('nota.journal.v1')||'{}');
+    const entries=(j.entries&&j.entries.profile)||{};
+    const p=Object.values(entries).map(e=>e.payload).find(pl=>pl&&!pl.deleted);
+    if(!p)return;
+    const num=(v,d)=>{const n=+v;return isFinite(n)&&n>0?n:d;};
+    state.profile.w=num(p.weight,state.profile.w);
+    state.profile.h=num(p.height,state.profile.h);
+    state.profile.age=num(p.age,state.profile.age);
+    state.profile.sex=(p.sex==='f'||p.sex==='m')?p.sex:state.profile.sex;
+    state.profile.al=num(p.activity,state.profile.al);
+    state.profile.waist=num(p.waist,state.profile.waist);
+    state.profile.belly=num(p.belly,state.profile.belly);
+    state.profile.thigh=num(p.thigh,state.profile.thigh);
+    state.profile.arm=num(p.arm,state.profile.arm);
+  }catch(e){}
+}
+
+// Фиксированный справочный ориентир (без расчёта от веса — ФЗ-152/ФЗ-323).
+function tdee(){return 2200;}
+// Ориентиры — справочные значения, не персональная цель и не медицинская рекомендация.
+function calorieGoal(maint){
+  // Дефицит/профицит не навязываются пользователю (ФЗ-323: мед. рекомендации вне телемедицины).
+  return maint;
+}
+function localDayKey(value){
+  const d=value instanceof Date?value:new Date(value);
+  if(Number.isNaN(d.getTime()))return'';
+  return[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+}
+function readRealWeek(){
+  const now=new Date(),days=[];
+  for(let back=6;back>=0;back--){
+    const date=new Date(now);date.setHours(12,0,0,0);date.setDate(date.getDate()-back);
+    days.push({key:localDayKey(date),d:back===0?'сег':date.toLocaleDateString('ru-RU',{weekday:'short'}).replace('.',''),
+      kcal:0,fiber:0,noise:null,hasData:false,cur:back===0});
+  }
+  const byKey=new Map(days.map(x=>[x.key,x]));
+  try{
+    const journal=JSON.parse(localStorage.getItem('nota.journal.v1')||'{}');
+    const entries=Object.values((journal.entries&&journal.entries.meal)||{});
+    for(const entry of entries){
+      const p=entry&&entry.payload;if(!p||p.deleted===true)continue;
+      const day=byKey.get(localDayKey(entry.at));if(!day)continue;
+      day.kcal+=Math.max(0,Number(p.kcal)||0);day.hasData=true;
+    }
+  }catch(e){/* локальный журнал необязателен */}
+  const today=days[days.length-1];
+  if(state.meals.length){today.kcal=dayIntake();today.fiber=+dayFiber().toFixed(1);today.noise=dayProcessingScore();today.hasData=true;}
+  return days;
+}
+function renderWeek(){
+  const td=Math.max(tdee(),1),days=readRealWeek();
+  const el=document.getElementById('week');
+  el.innerHTML=days.map((x,i)=>{
+    const h=x.hasData?clamp(x.kcal*0.56/td*100,4,100):0;
+    const barCol=x.kcal<=td?'#5db89a':'#d47a5d';
+    const dotCol=x.noise==null?'transparent':mix('#e8c87a','#ff3d22',clamp(x.noise,0,1));
+    return `<div class="wcol${x.cur?' cur':''}${x.hasData?'':' empty'}" data-i="${i}"><div class="wbar-track"><div class="wbar" style="height:${h.toFixed(0)}%;background:${barCol}"></div></div><div class="wdot" style="background:${dotCol}"></div><div class="wday">${htmlEscape(x.d)}</div></div>`;
+  }).join('');
+  el.querySelectorAll('.wcol').forEach(c=>c.addEventListener('click',()=>{
+    el.querySelectorAll('.wcol').forEach(z=>z.classList.remove('sel'));
+    c.classList.add('sel');
+    const x=days[+c.getAttribute('data-i')];
+    if(!x.hasData){document.getElementById('weekDetail').textContent=`${x.d}: данных нет`;return;}
+    const dir=x.kcal<=td?'дефицит':'профицит';
+    const nz=x.noise==null?'нет данных':x.noise<0.34?'низкая':x.noise<0.66?'средняя':'высокая';
+    const fiber=x.fiber>0?` · клетчатка ${x.fiber} г`:'';
+    document.getElementById('weekDetail').textContent=`${x.d}: ${Math.round(x.kcal)} ккал · ${dir}${fiber} · обработка: ${nz}`;
+  }));
+}
+function activeLoadNow(){
+  const now=state.now;let kc=0;
+  for(const m of state.meals)kc+=m.kcal*digestionActivityAt(m,now);
+  return kc;
+}
+function kcalToPeriod(l){return clamp(1400+l*2.0,1400,3400);}
+function kcalToAmp(l){return clamp(map(l,0,800,0.010,0.055),0.010,0.055);}
+function renderDigestiveStatus(load){
+  const value=document.getElementById('digestNow'),cat=document.getElementById('digestCat');if(!value||!cat)return;
+  const pct=Math.round(clamp(load,0,1)*100);value.textContent=pct+'%';
+  const label=pct<4?'нет':pct<34?'низкая':pct<67?'умеренная':'высокая';
+  cat.textContent=label;cat.style.color=pct<4?'var(--faint)':pct<34?'var(--plant)':pct<67?'var(--gold)':'var(--animal)';
+}
+
+/* render model consumed by canvas loop */
+let RM={};
+function buildRenderModel(){
+  state.now=new Date();
+  const now=state.now;
+  const nowA=timeToAngle(now.getHours(),now.getMinutes());
+  const S=substrateBalance();
+  const disposal=clamp(expenditure()/300,0,0.6);
+  const times=Sun.getTimes(now,GEO.lat,GEO.lng);
+  const isDay=now>=times.sunrise&&now<times.sunset;
+  const net=clamp(activeLoadNow()-expenditure(),0,1200);
+
+  const meals=state.meals.map(m=>{
+    const span=(m.digestionH/24)*TAU;
+    const cnt=Math.max(2,Math.round(map(m.gl,0,40,4,40)*(1-disposal)));
+    return{startA:timeToAngle(m.hour),span,count:clamp(cnt,2,44),seeds:m.seeds,load:mealLoad(m),late:m.hour>=14};
+  });
+  const acts=state.acts.map(a=>({startA:(a.startMin/1440)*TAU,span:(a.dur/1440)*TAU}));
+
+  // «активная» пищевая нагрузка сейчас — усиливает и ускоряет пульс
+  let quiet=1;
+  for(const m of state.meals){
+    quiet*=1-clamp(mealLoad(m)*digestionActivityAt(m,now),0,0.95);
+  }
+  const activeFoodLoad=1-quiet;
+  const periodMs=clamp(kcalToPeriod(net)-activeFoodLoad*450,900,3400);
+  const amp=clamp(kcalToAmp(net)*(1+1.1*activeFoodLoad),0.010,0.11);
+
+  // Текущая пищеварительная нагрузка затухает по завершении окна каждого приёма.
+  const noise=digestionNoiseNow(now);
+
+  RM={nowA,S,isDay,moonPhase:Sun.moonPhase(now),pulse:{periodMs,amp},meals,acts,noise,fuel:dayFuel()};
+  cv.dataset.noise=noise.toFixed(3);
+  renderDigestiveStatus(noise);
+}
+
+/* ---------- canvas render ---------- */
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+let CW=0,CH=0,DPR=1;
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  const w=cv.clientWidth,h=cv.clientHeight;
+  cv.width=w*DPR;cv.height=h*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);
+  CW=w;CH=h;
+}
+window.addEventListener('resize',resize);
+
+const TILT=62*Math.PI/180,CA=Math.cos(TILT),SA=Math.sin(TILT);
+const L=(function(){const x=0.2,y=-0.4,z=0.9,m=Math.hypot(x,y,z);return{x:x/m,y:y/m,z:z/m};})();
+function tp(u,v,R,r){const cr=R+r*Math.cos(v);return{x:cr*Math.cos(u),y:cr*Math.sin(u),z:r*Math.sin(v)};}
+function tn(u,v){return{x:Math.cos(v)*Math.cos(u),y:Math.cos(v)*Math.sin(u),z:Math.sin(v)};}
+function rot(p){return{x:p.x,y:p.y*CA-p.z*SA,z:p.y*SA+p.z*CA};}
+
+function inDigest(timeA){
+  for(const m of RM.meals){
+    const en=m.startA+m.span;
+    if(en<=TAU?(timeA>=m.startA&&timeA<=en):(timeA>=m.startA||timeA<=wrap2pi(en)))return true;
+  }
+  return false;
+}
+function inActivity(timeA){
+  for(const a of RM.acts){
+    const en=a.startA+a.span;
+    if(en<=TAU?(timeA>=a.startA&&timeA<=en):(timeA>=a.startA||timeA<=wrap2pi(en)))return true;
+  }
+  return false;
+}
+function digestInfoAt(timeA){
+  let best=-1,late=false,found=false;
+  for(const m of RM.meals){
+    const en=m.startA+m.span;
+    const inside=en<=TAU?(timeA>=m.startA&&timeA<=en):(timeA>=m.startA||timeA<=wrap2pi(en));
+    if(inside){found=true;if(m.late)late=true;if(m.load>best)best=m.load;}
+  }
+  return found?{load:best,late}:null;
+}
+
+function drawLum(cx,cy){
+  const t=performance.now();
+  const br=1+0.05*Math.sin(t/1600);              // мягкое дыхание, без дрожания
+  const nz=RM.noise||0;
+  const size=Math.min(CW,CH);
+  let lumR;
+  if(RM.isDay){
+    const R=size*0.058*br;
+    lumR=R;
+    let g=ctx.createRadialGradient(cx,cy,3,cx,cy,R*2.4);
+    g.addColorStop(0,'rgba(255,224,150,0.95)');g.addColorStop(0.5,'rgba(232,180,80,0.5)');g.addColorStop(1,'rgba(232,180,80,0)');
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,R*2.4,0,TAU);ctx.fill();
+    ctx.fillStyle='#ffe08a';ctx.beginPath();ctx.arc(cx,cy,R,0,TAU);ctx.fill();
+  }else{
+    const R=size*0.052*br;
+    lumR=R;
+    drawMoonPhase(cx,cy,R,RM.moonPhase);          // корректная фаза луны, без дрожания
+    let g=ctx.createRadialGradient(cx,cy,R,cx,cy,R*2.6);
+    g.addColorStop(0,'rgba(180,200,230,0.28)');g.addColorStop(1,'rgba(180,200,230,0)');
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,R*2.6,0,TAU);ctx.fill();
+  }
+  speckle(cx,cy,lumR,nz);                         // нагрузка видна и на солнце, и на луне
+}
+// фаза луны через терминатор-эллипс: 0/1 — новолуние, 0.5 — полнолуние
+function drawMoonPhase(cx,cy,r,phase){
+  const lit='#dbe3ef',dark='rgba(30,36,52,1)';
+  ctx.save();
+  ctx.beginPath();ctx.arc(cx,cy,r,0,TAU);ctx.closePath();ctx.clip();
+  ctx.fillStyle=dark;ctx.fillRect(cx-r,cy-r,2*r,2*r);
+  const wax=phase<0.5;
+  const xt=(wax?1:-1)*r*Math.cos(2*Math.PI*phase);
+  ctx.beginPath();
+  ctx.arc(cx,cy,r,-Math.PI/2,Math.PI/2,!wax);     // растущая — правый лимб; убывающая — левый
+  ctx.ellipse(cx,cy,Math.abs(xt),r,0,Math.PI/2,-Math.PI/2,xt>0);
+  ctx.closePath();
+  ctx.fillStyle=lit;ctx.fill();
+  ctx.restore();
+}
+const NOISE_SEEDS=Array.from({length:26},(_,i)=>{
+  const rnd=n=>{const x=Math.sin((i+1)*n)*43758.5453;return x-Math.floor(x);};
+  return{a:rnd(12.9898)*TAU,rr:rnd(78.233)*0.92,phase:rnd(39.425)*TAU,size:0.8+rnd(91.17)*1.3,light:rnd(54.31)>.5};
+});
+// Мягкое детерминированное мерцание текущей пищеварительной нагрузки.
+function speckle(x,y,R,nz){
+  if(reduce||nz<=0.03)return;
+  const n=Math.round(nz*26);
+  for(let i=0;i<n;i++){
+    const s=NOISE_SEEDS[i],twinkle=0.5+0.5*Math.sin(performance.now()/700+s.phase);
+    const al=(0.18+0.42*twinkle)*Math.min(1,nz*1.5);
+    ctx.beginPath();ctx.arc(x+Math.cos(s.a)*s.rr*R,y+Math.sin(s.a)*s.rr*R,s.size,0,TAU);
+    ctx.fillStyle=s.light?`rgba(255,246,214,${al.toFixed(2)})`:`rgba(45,32,20,${al.toFixed(2)})`;
+    ctx.fill();
+  }
+}
+
+const NU=92,NV=26;
+function draw(){
+  ctx.clearRect(0,0,CW,CH);
+  if(!RM.meals){requestAnimationFrame(draw);return;}
+  const cx=CW/2,cy=CH/2,size=Math.min(CW,CH);
+  const R=size*0.30,r=R*0.42;
+  const t=performance.now();
+  const pulse=reduce?1:1+RM.pulse.amp*Math.sin(TAU*t/RM.pulse.periodMs);
+  const base=RM.nowA+Math.PI/2; // отражение: время идёт по кольцу в обратную сторону, «сейчас» спереди
+
+  const patches=[];
+  for(let i=0;i<NU;i++){
+    for(let j=0;j<NV;j++){
+      const u0=i/NU*TAU,u1=(i+1)/NU*TAU,v0=j/NV*TAU,v1=(j+1)/NV*TAU;
+      const uc=(u0+u1)/2,vc=(v0+v1)/2;
+      const c3=rot(tp(uc,vc,R,r));
+      const timeA=wrap2pi(base-uc);
+      const n=rot(tn(uc,vc));
+      const lit=Math.max(0,n.x*L.x+n.y*L.y+n.z*L.z);
+      const fill=shadeRGB(dayRGB((timeA/TAU)*24),0.42+0.58*lit); // фон-заливка (день/ночь) не меняется
+      // сетка: активность — голубая; приём — по НАГРУЗКЕ жёлтый→красный; иначе — заметный мешь
+      let grid;
+      if(inActivity(timeA)){
+        grid=`rgba(120,205,225,${(0.55+0.4*lit).toFixed(2)})`;
+      }else{
+        const di=digestInfoAt(timeA);
+        if(di){
+          const hot=di.late?{r:255,g:45,b:34}:{r:240,g:205,b:70}; // после 14 — красная, 7–14 — жёлтая
+          grid=`rgba(${hot.r|0},${hot.g|0},${hot.b|0},${(0.55+0.4*lit).toFixed(2)})`;
+        }else{
+          grid=`rgba(150,180,228,${(0.30+0.16*lit).toFixed(2)})`; // базовый мешь виден в обе стороны
+        }
+      }
+      const cor=[[u0,v0],[u1,v0],[u1,v1],[u0,v1]].map(([u,v])=>{const p=rot(tp(u,v,R,r));return[cx+p.x*pulse,cy+p.y*pulse];});
+      patches.push({z:c3.z,cor,fill,grid});
+    }
+  }
+  patches.sort((a,b)=>a.z-b.z);
+  const split=patches.findIndex(p=>p.z>=0);
+  const far=split<0?patches:patches.slice(0,split);
+  const near=split<0?[]:patches.slice(split);
+  for(const p of far)quad(p.cor,p.fill,p.grid);
+  drawLum(cx,cy);
+  for(const p of near)quad(p.cor,p.fill,p.grid);
+
+  // глюкоза: цвет — по циклу Рендла (жир преоблад. → жёлтые, глюкоза преоблад. → красные); плотность/дрожь — по нагрузке
+  const lumGuard=size*0.092;                  // зона диска светила — точки туда не рисуем
+  const dotCol=mixRGB({r:245,g:224,b:138},{r:255,g:70,b:50},clamp(RM.fuel,0,1)); // цвет фазы со шкалы Рендла: жир — светло-жёлтый, глюкоза — красный
+  for(const m of RM.meals){
+    const jit=reduce?0:m.load*2.6, spd=1+m.load*0.9;
+    for(let k=0;k<m.count;k++){
+      const sd=m.seeds[k];
+      const timeA=wrap2pi(m.startA+sd.uOff*m.span);
+      const rin=r*sd.rf;                       // радиус внутри трубки (< r)
+      const u=wrap2pi(base-timeA);const p=rot(tp(u,sd.v,R,rin));
+      let sx=cx+p.x*pulse,sy=cy+p.y*pulse;
+      if(jit){sx+=Math.sin(t/110+sd.tw*2)*jit;sy+=Math.cos(t/95+sd.tw)*jit;}
+      if(Math.hypot(sx-cx,sy-cy)<lumGuard)continue; // не перекрываем солнце/луну
+      const dep=clamp(map(p.z,-rin,rin,0.4,1),0.4,1);
+      const tw=reduce?0.7:0.35+0.65*Math.abs(Math.sin(t*spd/sd.sp+sd.tw));
+      dotG(sx,sy,(1.9+m.load*0.8)*dep,`rgba(${dotCol.r|0},${dotCol.g|0},${dotCol.b|0},${(tw*dep).toFixed(2)})`);
+    }
+  }
+  if(!reduce)requestAnimationFrame(draw);
+}
+function quad(c,fill,grid){ctx.beginPath();ctx.moveTo(c[0][0],c[0][1]);for(let i=1;i<4;i++)ctx.lineTo(c[i][0],c[i][1]);ctx.closePath();ctx.fillStyle=fill;ctx.fill();ctx.strokeStyle=grid;ctx.lineWidth=1;ctx.lineJoin='round';ctx.stroke();}
+function dotG(x,y,rad,color){ctx.beginPath();ctx.arc(x,y,rad,0,TAU);ctx.fillStyle=color;ctx.fill();}
+
+/* ---------- panels ---------- */
+function setAxis(id,d){
+  const c=CF[d.cf]||0.5,half=(1-c)*0.22,lo=clamp(d.pos-half,0,1),hi=clamp(d.pos+half,0,1);
+  const col=d.pos<0.34?'#5db89a':d.pos<0.66?'#c8a96e':'#d47a5d';
+  const m=document.getElementById(id+'M'),b=document.getElementById(id+'B'),cf=document.getElementById(id+'Cf');
+  m.style.left=(d.pos*100)+'%';m.style.background=col;
+  b.style.left=(lo*100)+'%';b.style.width=((hi-lo)*100)+'%';
+  cf.textContent=d.cf;cf.style.color=c>0.7?'#5db89a':c>0.45?'#c8a96e':'#d47a5d';
+}
+// то же, но с числовой уверенностью (для агрегата дня)
+function setAxisN(id,pos,cfn){
+  const c=cfn,half=(1-c)*0.22,lo=clamp(pos-half,0,1),hi=clamp(pos+half,0,1);
+  const col=pos<0.34?'#5db89a':pos<0.66?'#c8a96e':'#d47a5d';
+  const m=document.getElementById(id+'M'),b=document.getElementById(id+'B'),cf=document.getElementById(id+'Cf');
+  m.style.left=(pos*100)+'%';m.style.background=col;
+  b.style.left=(lo*100)+'%';b.style.width=((hi-lo)*100)+'%';
+  cf.textContent=c>0.7?'высокая':c>0.45?'средняя':'низкая';cf.style.color=c>0.7?'#5db89a':c>0.45?'#c8a96e':'#d47a5d';
+}
+// агрегат добавленных приёмов дня (взвешенно по калориям); КБЖУ/клетчатка/сахар/натрий — суммы
+function dayAgg(){
+  let W=0,kcal=0,p=0,f=0,c=0,fiber=0,sodium=0,asugar=0,gl=0,pp=0,wp=0,gp=0,pc=0,wc=0,gc=0,nu=0;
+  const microsKnown=state.meals.length>0&&state.meals.every(m=>m.microsKnown===true);
+  const glyKnown=state.meals.length>0&&state.meals.every(m=>m.glyKnown===true);
+  const nutriKnown=state.meals.length>0&&state.meals.every(m=>m.nutriKnown===true);
+  for(const m of state.meals){const w=Math.max(m.kcal,1);W+=w;
+    kcal+=m.kcal;p+=m.p;f+=m.f;c+=m.c;fiber+=m.fiber;sodium+=m.sodium;asugar+=m.asugar;gl+=m.gl;
+    pp+=m.proc.pos*w;wp+=m.whole.pos*w;gp+=m.gly.pos*w;
+    pc+=(CF[m.proc.cf]||0.5)*w;wc+=(CF[m.whole.cf]||0.5)*w;gc+=(CF[m.gly.cf]||0.5)*w;
+    nu+=(NUTRI_N[m.nutri]||3)*w;}
+  return {kcal,p,f,c,fiber:+fiber.toFixed(1),sodium,asugar,gl,
+    proc:{pos:pp/W,cfn:pc/W},whole:{pos:wp/W,cfn:wc/W},gly:{pos:gp/W,cfn:gc/W},
+    nutri:nutriLetter(nu/W),microsKnown,glyKnown,nutriKnown,isDraft:false};
+}
+// что показывать в блоке: сумма дня, если есть приёмы; иначе — выбранный черновик (превью)
+function displayMeal(){
+  if(state.meals.length)return dayAgg();
+  // приёмов нет — показываем нули (быстрый черновик убран; приёмы добавляются через ИИ)
+  return {kcal:0,p:0,f:0,c:0,fiber:0,sodium:0,asugar:0,gl:0,
+    proc:{pos:0.5,cfn:0.5},whole:{pos:0.5,cfn:0.5},gly:{pos:0.3,cfn:0.5},
+    nutri:'—',microsKnown:false,glyKnown:false,nutriKnown:false,isDraft:false,isEmpty:true};
+}
+function rng(v,pct){const lo=Math.round(v*(1-pct)),hi=Math.round(v*(1+pct));return lo+'–'+hi;}
+// Сохранение приёмов и активностей между открытиями вкладки (localStorage приложения).
+// Ключи localStorage продублированы из app/src/domain/keys.js (standalone HTML
+// не может импортировать модуль). Переименование ключа — только синхронно с keys.js.
+// Окно — скользящие 24 часа от начала текущего дня учёта (dayStartedAt), а не
+// календарная полночь: поздний приём в 23:50 не обнулится через 10 минут.
+const NUTRI_KEY='nota.nutrition.v1';
+const NUTRI_WINDOW_MS=24*60*60*1000;
+const NUTRI_SCHEMA_VERSION=2;
+let dayStartedAt=0; // окно начинается с первой реальной записи, а не с открытия пустой вкладки
+function hasDayData(){return state.meals.length>0||state.acts.length>0;}
+function clearPersistedDay(){try{localStorage.removeItem(NUTRI_KEY);localStorage.removeItem('nota.nutrition.forecast.v1');}catch(e){/* приватный режим */}}
+function isLegacyDraftActivity(a){
+  return a&&a.type==='walk_brisk'&&a.int==='moderate'&&Number(a.dur)===40
+    &&(Number(a.startMin)===1080||Number(a.hour)===18)&&a.src==='manual';
+}
+// Старые сборки один раз сохраняли пример: овсянка 08:00, салат 13:00 и прогулка.
+// Удаляем только помеченные demo-приёмы и связанную с ними точную demo-активность;
+// реальные записи, добавленные пользователем поверх примера, остаются.
+function removeLegacyDraft(d){
+  const meals=Array.isArray(d.meals)?d.meals:[];
+  const acts=Array.isArray(d.acts)?d.acts:[];
+  const hadDemoMeals=meals.some(m=>m&&m.demo===true);
+  if(!hadDemoMeals)return{...d,meals,acts};
+  return{...d,meals:meals.filter(m=>!m||m.demo!==true),acts:acts.filter(a=>!isLegacyDraftActivity(a))};
+}
+function persist(){
+  try{
+    if(!hasDayData()){localStorage.removeItem(NUTRI_KEY);return;}
+    if(!Number.isFinite(dayStartedAt)||dayStartedAt<=0)dayStartedAt=Date.now();
+    localStorage.setItem(NUTRI_KEY,JSON.stringify({version:NUTRI_SCHEMA_VERSION,meals:state.meals,acts:state.acts,startedAt:dayStartedAt}));
+  }catch(e){/* приватный режим — работаем в памяти */}
+}
+function loadPersisted(){
+  try{
+    const r=localStorage.getItem(NUTRI_KEY);if(!r)return false;
+    const d=removeLegacyDraft(JSON.parse(r));
+    if(!d.meals.length&&!d.acts.length){clearPersistedDay();return false;}
+    const now=Date.now();
+    let started=typeof d.startedAt==='number'?d.startedAt:0;
+    // Формат v1 хранил календарный день без startedAt. Реальные записи текущего дня
+    // сохраняем и начинаем для них одно 24-часовое окно с момента миграции.
+    if(!started&&d.day===new Date().toDateString())started=now;
+    if(!started||started>now+5*60*1000||now-started>=NUTRI_WINDOW_MS){clearPersistedDay();return false;}
+    dayStartedAt=started;
+    if(Array.isArray(d.meals))state.meals=d.meals;
+    if(Array.isArray(d.acts))state.acts=d.acts;
+    persist(); // записать очищенные demo-данные уже в схеме v2
+    return hasDayData();
+  }catch(e){clearPersistedDay();return false;}
+}
+// Автосброс, если вкладка остаётся открытой дольше 24 часов от начала дня учёта.
+function checkDayExpiry(){
+  if(dayStartedAt>0&&Date.now()-dayStartedAt>=NUTRI_WINDOW_MS){
+    const expiredWindowStartedAt=dayStartedAt;
+    state.meals=[];state.acts=[];dayStartedAt=0;clearPersistedDay();
+    updatePanels({preserveHistory:true,windowStartedAt:expiredWindowStartedAt});
+  }
+}
+function updatePanels(){
+  persist();
+  const m=displayMeal();  // сумма дня (если есть приёмы) или черновик — реагирует на добавление/удаление
+  const lbl=document.getElementById('kbjuLbl');if(lbl)lbl.textContent=m.isEmpty?'данных за день пока нет':'рацион за день · оценка';
+  // KBJU
+  document.getElementById('kcal').textContent=m.kcal;document.getElementById('kcalR').textContent=rng(m.kcal,0.18);
+  document.getElementById('prot').textContent=m.p;document.getElementById('protR').textContent=rng(m.p,0.2);
+  document.getElementById('fat').textContent=m.f;document.getElementById('fatR').textContent=rng(m.f,0.22);
+  document.getElementById('carb').textContent=m.c;document.getElementById('carbR').textContent=rng(m.c,0.2);
+  document.getElementById('asugar').textContent=m.asugar;
+  const nu=document.getElementById('nutri');nu.textContent=m.nutri;nu.style.color=NUTRI_COLOR[m.nutri];
+  const microVisible=m.microsKnown===true;
+  const glyVisible=m.glyKnown===true;
+  const nutriVisible=m.nutriKnown===true;
+  document.getElementById('microLabel').hidden=!microVisible;
+  document.getElementById('microRings').hidden=!microVisible;
+  document.getElementById('microChips').hidden=!(microVisible||nutriVisible);
+  document.getElementById('glyAxis').hidden=!glyVisible;
+  document.getElementById('glRow').hidden=!glyVisible;
+  setAxisN('proc',m.proc.pos,m.proc.cfn);setAxisN('whole',m.whole.pos,m.whole.cfn);
+  if(glyVisible)setAxisN('gly',m.gly.pos,m.gly.cfn);
+  document.getElementById('gl').textContent=m.gl;
+  const glCat=m.isDraft?(m.gl<=10?'низкая':m.gl<20?'средняя':'высокая'):(m.gl<=80?'низкая':m.gl<=120?'средняя':'высокая');
+  const glLo=m.isDraft?10:80,glHi=m.isDraft?20:120;
+  const glC=document.getElementById('glCat');glC.textContent=glCat;glC.style.color=m.gl<=glLo?'#5db89a':m.gl<=glHi?'#c8a96e':'#d47a5d';
+  // топливо (цикл Рендла): от добавленных приёмов дня — сбрасывается при «Очистить день»
+  const S=dayFuel();
+  document.getElementById('fuelFill').style.width=(S*100)+'%';
+  document.getElementById('fuelFill').style.background=mix('#f5e08a','#ff4632',S); // жир — светло-жёлтый, глюкоза — красный
+  document.getElementById('fuelMk').style.left=(S*100)+'%';
+  document.getElementById('fuelLbl').textContent=S<0.4?'жир преоблад.':S>0.6?'глюкоза преоблад.':'смешанно';
+  // activity
+  document.getElementById('expend').textContent=Math.round(expenditure());
+  document.getElementById('expend2').textContent=Math.round(expenditure());
+  document.getElementById('actCount').textContent=state.acts.length;
+  renderActs();
+  document.getElementById('overlapNote').hidden=state.acts.length<2;
+  // profile/day
+  const profileReady=hasCompleteProfile();
+  const td=tdee();document.getElementById('tdee').textContent=profileReady?td:'—';
+  const intake=dayIntake();document.getElementById('intake').textContent=intake;
+  const burn=td+expenditure();            // расход дня = ориентир(TDEE) + залогированная активность/трекер
+  const balance=intake-burn;              // энергобаланс, ккал (минус = дефицит)
+  const goal=Math.round(calorieGoal(burn));   // цель по калориям, целое
+  const loss=goal<Math.round(burn);           // цель — снижение?
+  document.getElementById('calGoal').innerHTML=profileReady
+    ?`<b>${goal}</b> ккал <span class="tag est">${loss?'снижение':'поддержание'}</span>`
+    :'Заполните профиль';
+  const dir=document.getElementById('direction');
+  if(!profileReady){dir.textContent='Заполните профиль для персонального ориентира';dir.style.color='var(--faint)';}
+  else if(intake===0){dir.textContent='—';dir.style.color='var(--faint)';}
+  else{
+    const gap=intake-goal;
+    if(Math.abs(gap)<goal*0.05){dir.innerHTML='у цели <span class="tag est">оценка</span>';dir.style.color='var(--gold)';}
+    else if(gap<0){dir.innerHTML=`ниже цели на ${Math.round(-gap)} ккал <span class="tag est">оценка</span>`;dir.style.color='var(--plant)';}
+    else{dir.innerHTML=`выше цели на ${Math.round(gap)} ккал <span class="tag est">оценка</span>`;dir.style.color='var(--animal)';}
+  }
+  renderRings();
+  // WHtR-элемент переехал в «Динамику» — обновляем только если он присутствует
+  const whtrEl=document.getElementById('whtr');
+  const p=state.profile;
+  if(whtrEl){
+    if(p.waist>0&&p.h>0){
+      const r=p.waist/p.h;
+      const zone=r<0.5?'в норме':r<0.6?'повышенно':'высоко';
+      whtrEl.textContent=r.toFixed(2)+' · '+zone;
+      whtrEl.style.color=r<0.5?'var(--plant)':r<0.6?'var(--gold)':'var(--animal)';
+    }else{whtrEl.textContent='—';}
+  }
+  // Суточный баланс не является прогнозом изменения массы тела. Вес показывается
+  // только по фактически внесённым измерениям во вкладке «Динамика».
+  try{localStorage.removeItem('nota.nutrition.forecast.v1');}catch(e){/* приватный режим */}
+  renderWeek();
+  renderMeals();
+  renderLowcarb();
+  updateMol();
+  buildRenderModel();
+}
+
+/* ---------- molecular phase UI ---------- */
+let molOpen=false;
+function updateMol(){
+  const idx=currentMolIndex(state.now);
+  document.getElementById('molWord').textContent=MOL[idx].name;
+  if(molOpen)renderMolList(idx);
+}
+function renderMolList(curIdx){
+  const w=molWindows(state.now);
+  const wrap=document.getElementById('molList');
+  wrap.innerHTML=w.map(p=>{
+    const m=MOL[p.i];
+    return`<div class="molitem${p.i===curIdx?' cur':''}"><div class="mt"><span class="mn">${m.name}</span><span class="mtime">${fmtH(p.start)}–${fmtH(p.end)}</span></div><div class="md">${m.desc}</div></div>`;
+  }).join('');
+}
+document.getElementById('molBtn').addEventListener('click',()=>{
+  molOpen=!molOpen;
+  const list=document.getElementById('molList');
+  list.hidden=!molOpen;
+  document.getElementById('molBtn').setAttribute('aria-expanded',molOpen);
+  if(molOpen)renderMolList(currentMolIndex(state.now));
+});
+
+/* ---------- controls ---------- */
+function bindChips(wrapId,attr,setter){
+  const w=document.getElementById(wrapId);
+  w.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{
+    w.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');setter(b.getAttribute(attr));updatePanels();
+  }));
+}
+bindChips('intChips','data-i',v=>state.actInt=v);
+
+function mealType(h){return h<11?'завтрак':h<16?'обед':h<22?'ужин':'перекус';}
+const round5=(min)=>Math.round(min/5)*5;                       // минуты → к 5 мин
+const nowFracHour=()=>round5(state.now.getHours()*60+state.now.getMinutes())/60;
+const hour=document.getElementById('hour');
+function setHourLabel(){document.getElementById('hourLbl').textContent=fmtH(state.mealHour)+' · '+mealType(state.mealHour);}
+hour.addEventListener('input',()=>{state.mealHour=+hour.value/60;setHourLabel();});
+const dur=document.getElementById('dur');
+dur.addEventListener('input',()=>{state.actDur=+dur.value;document.getElementById('durLbl').textContent=state.actDur+' мин';});
+const ahour=document.getElementById('ahour');
+ahour.addEventListener('input',()=>{state.actHour=+ahour.value;document.getElementById('ahourLbl').textContent=String(state.actHour).padStart(2,'0')+':00';});
+document.getElementById('actType').addEventListener('change',e=>state.actType=e.target.value);
+document.getElementById('lcToggle').addEventListener('click',()=>{state.lowcarb.on=!state.lowcarb.on;updatePanels();});
+document.getElementById('lcWeek').addEventListener('input',e=>{state.lowcarb.week=+e.target.value;updatePanels();});
+
+// список приёмов сегодня с удалением и редактированием
+function renderMeals(){
+  const el=document.getElementById('mealsList');
+  const sorted=state.meals.map((m,i)=>({m,i})).sort((a,b)=>a.m.hour-b.m.hour);
+  if(!sorted.length){el.innerHTML='<div class="meals-empty">приёмов пока нет — добавьте выше</div>';return;}
+  el.innerHTML=sorted.map(({m,i})=>`<div class="meal-row"><span class="mtxt">${fmtH(m.hour)} · ${mealType(m.hour)} · <b>${htmlEscape(m.name)}</b> · ${Math.max(0,Math.round(Number(m.kcal)||0))} ккал</span><button class="meal-btn edit" data-i="${i}" title="редактировать">✎</button><button class="meal-btn rep" data-i="${i}" title="повторить">↻</button><button class="meal-btn del" data-i="${i}" title="удалить">×</button></div>`).join('');
+  el.querySelectorAll('.meal-btn.del').forEach(b=>b.addEventListener('click',()=>{state.meals.splice(+b.getAttribute('data-i'),1);updatePanels();}));
+  el.querySelectorAll('.meal-btn.edit').forEach(b=>b.addEventListener('click',()=>editMeal(+b.getAttribute('data-i'))));
+  el.querySelectorAll('.meal-btn.rep').forEach(b=>b.addEventListener('click',()=>repeatMeal(+b.getAttribute('data-i'))));
+}
+// повтор приёма: новый приём временем нажатия кнопки (fresh Date), отдельная запись
+function repeatMeal(i){
+  const src=state.meals[i];if(!src)return;
+  const m=JSON.parse(JSON.stringify(src));
+  state.now=new Date();
+  m.hour=nowFracHour();
+  m.eatenAt=mealTimestamp(m.hour,state.now);
+  m.demo=false;delete m.uid;            // повтор — реальная запись (даже если исходник был примером)
+  m.digestionH=estimateDigestion(m);
+  m.seeds=makeSeeds();
+  state.meals.push(m);updatePanels();
+}
+// Форма приёма (название, КБЖУ, время) — общая для правки и ручного ввода.
+function openMealForm(opts){
+  const {title,meal,saveLabel,onSave,intro}=opts;
+  const val=v=>(v||v===0)?v:'';
+  document.getElementById('modalBody').innerHTML=`<div class="m-title">${htmlEscape(title)}</div>
+    ${intro?`<p class="mtext" style="margin-top:.65rem">${htmlEscape(intro)}</p>`:''}
+    <div style="display:flex;flex-direction:column;gap:0.4rem;margin-top:0.7rem">
+      <div class="ctl-row"><span>название и состав блюда</span></div><input id="edName" type="text" maxlength="80" value="${htmlEscape(meal.name)}" placeholder="например, яичница из 3 яиц на топлёном масле">
+      <div class="grid2">
+        <div><div class="ctl-row"><span>ккал</span></div><input id="edKcal" type="number" inputmode="numeric" min="0" max="10000" value="${val(meal.kcal)}"></div>
+        <div><div class="ctl-row"><span>белки, г</span></div><input id="edP" type="number" inputmode="decimal" min="0" max="1000" step="0.1" value="${val(meal.p)}"></div>
+        <div><div class="ctl-row"><span>жиры, г</span></div><input id="edF" type="number" inputmode="decimal" min="0" max="1000" step="0.1" value="${val(meal.f)}"></div>
+        <div><div class="ctl-row"><span>углеводы, г</span></div><input id="edC" type="number" inputmode="decimal" min="0" max="1000" step="0.1" value="${val(meal.c)}"></div>
+      </div>
+      <div style="margin-top:0.4rem"><div class="ctl-row"><span>время приёма</span><b id="edHourLbl">${fmtH(meal.hour)}</b></div>
+        <input id="edHour" type="range" min="0" max="1435" step="5" value="${Math.round(meal.hour*60)}"></div>
+      <button class="act" id="edSave" style="margin-top:0.5rem">${saveLabel||'Сохранить'}</button>
+    </div>`;
+  document.getElementById('modalOv').hidden=false;
+  document.getElementById('edHour').addEventListener('input',e=>{document.getElementById('edHourLbl').textContent=fmtH(+e.target.value/60);});
+  document.getElementById('edSave').addEventListener('click',()=>{
+    const num=(id,max)=>clamp(Math.round((+document.getElementById(id).value||0)*10)/10,0,max);
+    const v={
+      name:(document.getElementById('edName').value||meal.name||'приём').slice(0,80),
+      kcal:Math.round(num('edKcal',10000)),p:num('edP',1000),f:num('edF',1000),c:num('edC',1000),
+      hour:+document.getElementById('edHour').value/60,
+    };
+    document.getElementById('modalOv').hidden=true;
+    onSave(v);
+  });
+}
+// правка существующего приёма — сохраняется на месте
+function editMeal(i){
+  const m=state.meals[i];if(!m)return;
+  openMealForm({title:'Правка приёма',meal:m,saveLabel:'Сохранить',onSave:v=>{
+    m.name=v.name;m.kcal=v.kcal;m.p=v.p;m.f=v.f;m.c=v.c;m.hour=v.hour;m.eatenAt=mealTimestamp(v.hour,state.now);
+    m.gl=Math.round((m.gi||50)*m.c/100);
+    m.demo=false;                        // отредактированный приём — реальная запись
+    m.digestionH=estimateDigestion(m);
+    if(m.source!=='barcode'){m.proc=estimateProcessing(m.name,m.confidence);m.processingVersion=PROCESSING_MODEL_VERSION;}
+    updatePanels();
+  }});
+}
+// ручной ввод приёма без ИИ — всегда доступен, не требует сервера
+function manualMeal(){
+  openMealForm({title:'Приём вручную',meal:{name:'',kcal:'',p:'',f:'',c:'',hour:state.mealHour},saveLabel:'Добавить приём',onSave:v=>{
+    const m=mealFromKbju(v.name,v.kcal,v.p,v.f,v.c,v.hour);
+    m.source='manual';m.hour=v.hour;m.eatenAt=mealTimestamp(v.hour,state.now);m.digestionH=estimateDigestion(m);m.seeds=makeSeeds();
+    state.meals.push(m);updatePanels();
+  }});
+}
+document.getElementById('manualBtn').addEventListener('click',manualMeal);
+
+// ищем ближайшее свободное начало (после занятых интервалов), чтобы активности не накладывались
+function findFreeStart(start,dur){
+  let s=Math.max(0,Math.min(start,1440-dur)),moved=true,guard=0;
+  while(moved&&guard++<64){
+    moved=false;
+    for(const a of state.acts){const as=a.startMin,ae=as+a.dur;if(s<ae&&s+dur>as){s=ae;moved=true;}}
+    if(s+dur>1440){s=Math.max(0,1440-dur);break;}
+  }
+  return s;
+}
+function pushAct(type,int,dur,hour,kcal,src){
+  const startMin=findFreeStart(hour*60,dur);
+  state.acts.push({type,int,dur,startMin,hour,kcal:Math.round(kcal),src});updatePanels();
+}
+const ACT_LABEL={walk_low:'ходьба спокойно',walk_brisk:'ходьба бодро',run:'бег',cycling:'велосипед',strength:'силовая',hiit:'HIIT',yoga:'йога'};
+function fmtHM(min){const h=Math.floor(min/60)%24,m=min%60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');}
+function renderActs(){
+  const el=document.getElementById('actsList');
+  const sorted=state.acts.map((a,i)=>({a,i})).sort((x,y)=>x.a.startMin-y.a.startMin);
+  if(!sorted.length){el.innerHTML='<div class="meals-empty">активностей пока нет</div>';return;}
+  el.innerHTML=sorted.map(({a,i})=>`<div class="meal-row"><span class="mtxt">${fmtHM(a.startMin)}–${fmtHM(a.startMin+a.dur)} · <b>${ACT_LABEL[a.type]||a.type}</b> · ${a.dur} мин · ${a.kcal} ккал</span><button class="meal-btn edit" data-i="${i}" title="редактировать">✎</button><button class="meal-btn del" data-i="${i}" title="удалить">×</button></div>`).join('');
+  el.querySelectorAll('.meal-btn.del').forEach(b=>b.addEventListener('click',()=>{state.acts.splice(+b.getAttribute('data-i'),1);updatePanels();}));
+  el.querySelectorAll('.meal-btn.edit').forEach(b=>b.addEventListener('click',()=>editAct(+b.getAttribute('data-i'))));
+}
+function editAct(i){
+  const a=state.acts[i];
+  state.actType=a.type;state.actInt=a.int;state.actDur=a.dur;state.actHour=Math.floor(a.startMin/60);
+  const ts=document.getElementById('actType');if(ts)ts.value=a.type;
+  document.querySelectorAll('#intChips .chip').forEach(c=>c.classList.toggle('on',c.getAttribute('data-i')===a.int));
+  const dr=document.getElementById('dur');dr.value=a.dur;document.getElementById('durLbl').textContent=a.dur+' мин';
+  const ah=document.getElementById('ahour');ah.value=state.actHour;document.getElementById('ahourLbl').textContent=String(state.actHour).padStart(2,'0')+':00';
+  state.acts.splice(i,1);       // вынули в черновик — измените и жмите «Добавить активность»
+  updatePanels();
+}
+document.getElementById('addAct').addEventListener('click',()=>{
+  const kc=kcalFromMET(state.actType,state.profile.w,state.actDur);
+  pushAct(state.actType,state.actInt,state.actDur,state.actHour,kc,'manual');
+});
+document.getElementById('track10k').addEventListener('click',()=>{
+  pushAct('walk_brisk','moderate',75,state.actHour,kcalFromSteps(10000,state.profile.w,state.profile.h),'tracker');
+});
+document.getElementById('track30').addEventListener('click',()=>{
+  pushAct('run','high',30,state.actHour,kcalFromMET('run',state.profile.w,30),'tracker');
+});
+document.getElementById('clearDay').addEventListener('click',()=>{
+  const clearedWindowStartedAt=dayStartedAt;
+  state.meals=[];state.acts=[];dayStartedAt=0;clearPersistedDay();
+  updatePanels({windowStartedAt:clearedWindowStartedAt});
+});
+
+/* ---------- init ---------- */
+const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+resize();
+loadProfileFromJournal();
+// время приёма по умолчанию — текущее время (к 5 мин); ползунок можно сдвинуть
+state.now=new Date();
+state.mealHour=nowFracHour();
+document.getElementById('hour').value=Math.round(state.mealHour*60);
+setHourLabel();
+// восстановить приёмы за сегодня (в пределах 24 ч); если их нет — пустой день
+if(loadPersisted()){
+  // у восстановленных приёмов могли не сохраниться «семена» анимации — восполнить
+  for(const mm of state.meals){ensureMealModel(mm);if(!mm.seeds)mm.seeds=makeSeeds();}
+}
+updatePanels();
+// Световой день оценивается локально по часовому поясу. Координаты пользователя
+// автоматически не запрашиваем: для ритма питания такой точности достаточно.
+// keep time current
+setInterval(()=>{state.now=new Date();checkDayExpiry();updateMol();buildRenderModel();},30000);
+draw();
+if(reduce)draw(); // single frame
+
+/* ================= ИИ-оценка КБЖУ (aitunnel) и мост в общий журнал =================
+   Добавлено поверх исходного виджета: реальная оценка по описанию/фото через API
+   приложения и передача приёмов родительскому окну для недельного тороида и «Сегодня».
+   Исходные алгоритмы и анимация не изменялись. */
+const AI_ERR={feature_disabled:'ИИ-анализ на сервере выключен. Добавьте приём кнопкой «Ввести вручную» или по штрих-коду.',
+  consent_required:'Подтвердите согласие на AI в разделе «Ещё» и попробуйте снова.',
+  quota_exceeded:'Лимит ИИ-оценок исчерпан — добавьте вручную.',
+  trial_exhausted:'Четыре пробных фото уже использованы. Ручной ввод и штрих-код остаются доступны.',
+  too_many_requests:'Слишком много запросов одновременно. Подождите несколько секунд.',
+  provider_unavailable:'Модель сейчас недоступна. Добавьте приём вручную или позже.',
+  unauthorized:'Нет профиля на сервере — включите резервную копию во вкладке «Ещё» (или добавьте вручную).'};
+function aiErrText(code){return AI_ERR[code]||'Не удалось получить оценку.';}
+function aiNotice(text){const n=document.getElementById('aiNote');if(!n)return;n.hidden=!text;if(text)n.querySelector('span').textContent=text;}
+function getAuth(){try{const j=JSON.parse(localStorage.getItem('nota.journal.v1')||'{}');return{token:j.token||null,consent:!!(j.settings&&j.settings.aiConsent)};}catch(e){return{token:null,consent:false};}}
+let aiBusy=false;
+function setAiBusy(value){
+  aiBusy=value;
+  for(const id of['aiText','aiPhotoBtn']){const b=document.getElementById(id);if(b)b.disabled=value;}
+}
+function newRequestId(){return crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`;}
+async function callEstimate(path,body,options={}){
+  if(aiBusy)return null;
+  const a=getAuth();
+  if(!a.token){aiNotice('Для ИИ включите резервную копию во вкладке «Ещё». Либо добавьте приём кнопкой «Ввести вручную».');return null;}
+  if(!a.consent){aiNotice('Для ИИ включите согласие на «Ещё» (уходит только описание/фото). Либо «Ввести вручную».');return null;}
+  setAiBusy(true);
+  aiNotice('Считаю…');
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),65000);
+  try{
+    const headers={'Content-Type':'application/json','Authorization':'Bearer '+a.token};
+    if(options.idempotencyKey)headers['Idempotency-Key']=options.idempotencyKey;
+    const r=await fetch('/svoya-nota-app-api'+path,{method:'POST',headers,body:JSON.stringify(body),signal:controller.signal});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){aiNotice(aiErrText(d.error));return null;}
+    return d;
+  }catch(e){aiNotice(e&&e.name==='AbortError'?'ИИ не ответил вовремя. Попытка не сохранена — добавьте вручную или повторите позже.':'Нет связи с сервером. Данные не отправлены — добавьте приём кнопкой «Ввести вручную».');return null;}
+  finally{clearTimeout(timer);setAiBusy(false);}
+}
+// сборка приёма из КБЖУ ИИ со вторичными полями-оценками, совместимая с расчётами виджета
+function mealFromKbju(name,kcal,p,f,c,hour,confidence){
+  kcal=Math.max(0,Math.round(kcal));p=Math.max(0,Math.round(p));f=Math.max(0,Math.round(f));c=Math.max(0,Math.round(c));
+  const displayName=(name||'приём').slice(0,80),proc=estimateProcessing(displayName,confidence);
+  return {dishKey:null,portion:1,name:displayName,kcal,p,f,c,fiber:0,sodium:0,asugar:0,gi:0,
+    nutri:'—',proc,processingVersion:PROCESSING_MODEL_VERSION,whole:{pos:0.5,cf:'—'},
+    gly:{pos:0.5,cf:'—'},pot:0,mag:0,gl:0,microsKnown:false,glyKnown:false,nutriKnown:false,source:'ai',confidence};
+}
+function reviewAiMeal(d,fallbackName,source){
+  const confidence=clamp(Number(d.confidence)||0.5,0.05,0.95);
+  const floor=source==='photo_ai'?0.30:0.20;
+  const uncertainty=clamp(Math.max(floor,0.18+(1-confidence)*0.45),floor,0.55);
+  const kcal=Math.max(0,Math.round(Number(d.kcal)||0));
+  const lo=Math.max(0,Math.round(kcal*(1-uncertainty))),hi=Math.round(kcal*(1+uncertainty));
+  const remaining=Number.isFinite(Number(d.trialRemaining))?` Осталось пробных фото: ${d.trialRemaining}.`:'';
+  const comment=String(d.comment||'').trim();
+  const intro=`ИИ дал приблизительную оценку ${lo}–${hi} ккал. Проверьте состав, порцию, масло и соусы перед сохранением.${comment?' '+comment:''}${remaining}`;
+  const original={name:(d.description||fallbackName||'приём').slice(0,80),kcal,
+    p:Number(d.proteinG)||0,f:Number(d.fatG)||0,c:Number(d.carbG)||0,confidence};
+  openMealForm({title:'Проверьте оценку',intro,meal:{...original,hour:state.mealHour},saveLabel:'Сохранить приём',onSave:v=>{
+    const m=mealFromKbju(v.name,v.kcal,v.p,v.f,v.c,v.hour,confidence);
+    m.source=source;m.originalEstimate=original;m.userConfirmed=true;m.confirmedAt=new Date().toISOString();
+    m.hour=v.hour;m.eatenAt=mealTimestamp(m.hour,state.now);m.digestionH=estimateDigestion(m);m.seeds=makeSeeds();
+    state.meals.push(m);updatePanels();aiNotice('Сохранено как приблизительная оценка. Её можно поправить в списке приёмов.');
+  }});
+}
+async function resizePhoto(file){
+  if(!/^image\/(jpeg|png|webp)$/.test(file.type))throw new Error('Нужно фото JPEG, PNG или WebP.');
+  const bmp=await createImageBitmap(file).catch(()=>null);if(!bmp)throw new Error('Не удалось прочитать изображение.');
+  const scale=Math.min(1,1024/Math.max(bmp.width,bmp.height));
+  const cv=document.createElement('canvas');cv.width=Math.max(1,Math.round(bmp.width*scale));cv.height=Math.max(1,Math.round(bmp.height*scale));
+  cv.getContext('2d').drawImage(bmp,0,0,cv.width,cv.height);if(bmp.close)bmp.close();
+  for(const q of[0.82,0.65,0.5,0.35]){const u=cv.toDataURL('image/jpeg',q);if(u.length*3/4<=720*1024)return u;}
+  throw new Error('Фото слишком детальное — снимите ближе или при другом свете.');
+}
+document.getElementById('aiText').addEventListener('click',async()=>{
+  const desc=document.getElementById('aiDesc').value.trim();if(!desc)return;
+  const d=await callEstimate('/api/meals/estimate',{description:desc});
+  if(d){reviewAiMeal(d,desc,'text_ai');document.getElementById('aiDesc').value='';aiNotice('Оценка готова — проверьте её перед сохранением.');}
+});
+document.getElementById('aiPhotoBtn').addEventListener('click',()=>document.getElementById('aiPhoto').click());
+document.getElementById('aiPhoto').addEventListener('change',async(e)=>{
+  const file=e.target.files&&e.target.files[0];if(!file)return;
+  aiNotice('Готовлю фото…');let image;
+  try{image=await resizePhoto(file);}catch(err){aiNotice(err.message);e.target.value='';return;}
+  const hint=document.getElementById('aiDesc').value.trim();
+  const d=await callEstimate('/api/meals/analyze',{image,hint},{idempotencyKey:newRequestId()});
+  if(d){reviewAiMeal(d,hint||'блюдо с фото','photo_ai');aiNotice('Оценка по фото готова — проверьте её перед сохранением.');}
+  e.target.value='';
+});
+/* ========== Штрих-код упаковки → состав из каталога ==========
+   Считываем код камерой, с фотографии (где поддерживается) или вручную. Поиск идёт
+   через API приложения: браузер не обращается к внешнему каталогу напрямую. */
+function novaProc(nova){
+  const m={1:{pos:0.08,cf:'низкая'},2:{pos:0.32,cf:'ниже средней'},3:{pos:0.6,cf:'средняя'},4:{pos:0.9,cf:'высокая'}};
+  return m[nova]||{pos:0.5,cf:'—'};
+}
+function mealFromProduct(p,grams){
+  const k=Math.max(0,grams)/100,num=v=>Math.max(0,+v||0);
+  const kcal=Math.round(num(p.kcal100g)*k);
+  const prot=Math.round(num(p.protein100g)*k);
+  const fat=Math.round(num(p.fat100g)*k);
+  const carb=Math.round(num(p.carb100g)*k);
+  const fiber=+(num(p.fiber100g)*k).toFixed(1);
+  const asugar=Math.round(num(p.sugars100g)*k);
+  const sodium=Math.round(num(p.sodiumMg100g)*k);
+  const proc=novaProc(p.novaGroup),whole={pos:clamp(1-proc.pos,0,1),cf:proc.cf};
+  const microsKnown=['fiber100g','sugars100g','sodiumMg100g'].some(key=>Number.isFinite(Number(p[key])));
+  const base=(p.name||'продукт').trim();
+  const brand=(p.brand||'').split(',')[0].trim();
+  const addBrand=brand&&!base.toLowerCase().includes(brand.toLowerCase());
+  const nm=(base+(addBrand?' · '+brand:'')).slice(0,40);
+  return {dishKey:null,portion:1,name:nm,kcal,p:prot,f:fat,c:carb,fiber,sodium,asugar,gi:0,
+    nutri:'—',proc,whole,gly:{pos:0.5,cf:'—'},pot:0,mag:0,gl:0,
+    microsKnown,glyKnown:false,nutriKnown:false,source:'barcode',processingVersion:PROCESSING_MODEL_VERSION};
+}
+async function lookupBarcode(code){
+  const a=getAuth();
+  if(!a.token)throw new Error('unauthorized');
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),9000);
+  try{
+    const r=await fetch('/svoya-nota-app-api/api/products/barcode/'+encodeURIComponent(code),{
+      headers:{Accept:'application/json',Authorization:'Bearer '+a.token},signal:controller.signal
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){const err=new Error(d.error||'barcode_lookup_failed');err.code=d.error;throw err;}
+    return d.found?d:null;
+  }finally{clearTimeout(timer);}
+}
+let barStream=null,barTimer=null;
+function stopBarScan(){if(barTimer){clearInterval(barTimer);barTimer=null;}if(barStream){barStream.getTracks().forEach(t=>t.stop());barStream=null;}}
+function barNote(t){const n=document.getElementById('barNote');if(n)n.textContent=t||'';}
+function openBarcode(){
+  const canScan=('BarcodeDetector' in window);
+  document.getElementById('modalBody').innerHTML=`<div class="m-title">Штрих-код упаковки</div>
+    <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:0.7rem">
+      ${canScan?`<video id="barVid" playsinline muted style="width:100%;border-radius:10px;background:#000;aspect-ratio:4/3;object-fit:cover"></video>
+      <button class="act" id="barScan" style="margin-top:0">Сканировать камерой</button>`
+      :`<div class="mtext" style="color:var(--faint);font-size:11px">Камера-сканер недоступен в этом браузере — введите цифры под штрих-кодом вручную.</div>`}
+      <div class="ctl-row" style="margin-top:0.2rem"><span>код (цифры под штрих-кодом)</span></div>
+      <input id="barCode" type="text" inputmode="numeric" placeholder="например, 4600000000000">
+      <div class="ctl-row"><span>порция, г</span></div>
+      <input id="barGrams" type="number" inputmode="numeric" value="100">
+      <input id="barImage" type="file" accept="image/*" capture="environment" hidden>
+      ${canScan?`<button class="act ghost" id="barPhoto" style="margin-top:0.05rem">Считать с фото</button>`:''}
+      <button class="act" id="barFind" style="margin-top:0.3rem">Найти состав</button>
+      <div id="barNote" class="mtext" style="color:var(--faint);font-size:11px;min-height:1.1em"></div>
+      <div id="barResult"></div>
+    </div>`;
+  document.getElementById('modalOv').hidden=false;
+  document.getElementById('barFind').addEventListener('click',doBarcodeFind);
+  if(canScan){
+    document.getElementById('barPhoto').addEventListener('click',()=>document.getElementById('barImage').click());
+    document.getElementById('barImage').addEventListener('change',scanBarcodeImage);
+  }
+  if(canScan)document.getElementById('barScan').addEventListener('click',startBarScan);
+}
+async function scanBarcodeImage(e){
+  const file=e.target.files&&e.target.files[0];if(!file)return;
+  try{
+    const bmp=await createImageBitmap(file),det=new BarcodeDetector({formats:['data_matrix','ean_13','ean_8','upc_a','upc_e','code_128','code_39']});
+    const codes=await det.detect(bmp);if(bmp.close)bmp.close();
+    if(!codes||!codes.length){barNote('Код на фото не распознан. Попробуйте снять ближе или введите цифры вручную.');return;}
+    document.getElementById('barCode').value=codes[0].rawValue;barNote('Код считан с фото: '+codes[0].rawValue);doBarcodeFind();
+  }catch(err){barNote('Не удалось прочитать фото. Введите цифры под штрих-кодом вручную.');}
+  finally{e.target.value='';}
+}
+async function startBarScan(){
+  try{
+    barStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+    const v=document.getElementById('barVid');if(!v){stopBarScan();return;}
+    v.srcObject=barStream;await v.play();
+    const det=new BarcodeDetector({formats:['data_matrix','ean_13','ean_8','upc_a','upc_e','code_128','code_39']});
+    barNote('Наведите на штрих-код…');
+    barTimer=setInterval(async()=>{
+      const vid=document.getElementById('barVid');if(!vid){stopBarScan();return;}
+      try{const codes=await det.detect(vid);if(codes&&codes.length){
+        document.getElementById('barCode').value=codes[0].rawValue;
+        stopBarScan();vid.style.display='none';
+        barNote('Код считан: '+codes[0].rawValue);doBarcodeFind();
+      }}catch(e){/* кадр без кода — продолжаем */}
+    },350);
+  }catch(e){barNote('Нет доступа к камере — введите код вручную.');}
+}
+async function doBarcodeFind(){
+  const code=(document.getElementById('barCode').value||'').replace(/\D/g,'');
+  if(code.length<8||code.length>44){barNote('Введите корректный код (минимум 8 цифр).');return;}
+  const grams=Math.max(1,Math.round(+document.getElementById('barGrams').value||100));
+  barNote('Ищу в базе продуктов…');
+  let p;try{p=await lookupBarcode(code);}catch(e){
+    barNote(e&&e.code==='unauthorized'?'Включите резервную копию в разделе «Ещё», чтобы искать по штрих-коду.':'Каталог временно недоступен. Можно ввести блюдо вручную.');return;
+  }
+  if(!p){barNote('Продукт не найден в базе. Можно ввести описанием или фото.');return;}
+  const m=mealFromProduct(p,grams);
+  barNote('');
+  document.getElementById('barResult').innerHTML=`<div class="kv2" style="margin-top:0.5rem"><span><b>${htmlEscape(m.name)}</b> · ${grams} г</span><span><b>${m.kcal}</b> ккал</span></div>
+    <div class="kv2" style="color:var(--faint)"><span>Б ${m.p} · Ж ${m.f} · У ${m.c} г</span><span>переработка · ${m.proc.cf}</span></div>
+    <div class="mtext" style="color:var(--faint);font-size:11px;margin-top:0.35rem">Данные каталога — сверьте порцию и этикетку перед сохранением.</div>
+    <button class="act" id="barAdd" style="margin-top:0.5rem">Добавить приём (${fmtH(state.mealHour)})</button>`;
+  document.getElementById('barAdd').addEventListener('click',()=>{
+    m.hour=state.mealHour;m.eatenAt=mealTimestamp(m.hour,state.now);m.digestionH=estimateDigestion(m);m.seeds=makeSeeds();
+    state.meals.push(m);stopBarScan();document.getElementById('modalOv').hidden=true;updatePanels();
+  });
+}
+document.getElementById('barBtn').addEventListener('click',openBarcode);
+document.getElementById('modalX').addEventListener('click',stopBarScan);
+document.getElementById('modalOv').addEventListener('click',e=>{if(e.target.id==='modalOv')stopBarScan();});
+
+// мост: сообщаем родителю приёмы (без демо-примера) для недельного тороида и «Сегодня»
+function ensureUids(){for(const m of state.meals){if(m.uid==null)m.uid=Date.now().toString(36)+Math.random().toString(36).slice(2,6);}}
+function bridge(options={}){try{ensureUids();
+  const meals=state.meals.filter(m=>!m.demo).map(m=>({uid:m.uid,name:m.name,kcal:m.kcal,p:m.p,f:m.f,c:m.c,hour:m.hour}));
+  const windowStartedAt=Number.isFinite(options.windowStartedAt)?options.windowStartedAt:dayStartedAt;
+  const parentOrigin=document.referrer?new URL(document.referrer).origin:location.origin;
+  parent.postMessage({type:'nota-nutrition',meals,windowStartedAt,preserveHistory:!!options.preserveHistory},parentOrigin);}catch(e){}}
+const __origUpdatePanels=updatePanels;
+// uid до сохранения — иначе перезагрузка вкладки назначит новый id и создаст дубль в журнале
+updatePanels=function(options={}){ensureUids();__origUpdatePanels();bridge(options);};
+setTimeout(bridge,600);
+</script>
+</body>
+</html>

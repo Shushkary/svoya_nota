@@ -1,0 +1,34 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+server/.env
+
+# Dependencies and virtual environments
+node_modules/
+.venv/
+venv/
+server/.venv/
+
+# Generated output and test artefacts
+dist/
+test-results/
+coverage/
+.pytest_cache/
+.hypothesis/
+__pycache__/
+*.py[cod]
+
+# Runtime data and backups
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.log
+*.bak
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

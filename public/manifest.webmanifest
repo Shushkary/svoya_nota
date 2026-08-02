@@ -1,0 +1,17 @@
+{
+  "name": "Своя нота",
+  "short_name": "Своя нота",
+  "description": "Питание, мышление, чувства, воля и согласованность — одна недельная петля.",
+  "id": "/svoya-nota-app/",
+  "start_url": "/svoya-nota-app/",
+  "scope": "/svoya-nota-app/",
+  "display": "standalone",
+  "background_color": "#F6F2E9",
+  "theme_color": "#F6F2E9",
+  "lang": "ru",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

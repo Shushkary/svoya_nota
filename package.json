@@ -1,0 +1,26 @@
+{
+  "name": "nota-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test tests/architecture.test.js tests/toroid.test.js tests/domain/nutrition.test.js tests/domain/foodCatalog.test.js tests/domain/breathing.test.js tests/domain/application.test.js tests/domain/body.test.js tests/domain/barcode.test.js tests/domain/stateCheckIn.test.js tests/domain/insights.test.js tests/storage.test.js tests/phoneSteps.test.js tests/theme.test.js",
+    "check:architecture": "node --test tests/architecture.test.js",
+    "check:csp": "node scripts/csp-hashes.cjs",
+    "check:legal": "node scripts/check-legal.cjs",
+    "check:mobile": "node scripts/check-mobile.cjs",
+    "check:theme-profile": "node scripts/check-theme-profile.cjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "playwright": "^1.61.1",
+    "vite": "^5.4.11"
+  }
+}

@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Тороид центра · Манипура — практика солнечного сплетения</title>
+<style>
+  /* Палитра «Своей ноты»: тёплая бумага и графит; тёмная тема — по кнопке. */
+  :root{
+    --f-serif:"Iowan Old Style","Palatino Linotype",Georgia,"Times New Roman",serif;
+    --f-sans:"Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;
+    --void:#F6F2E9; --deep:#FCFAF3; --surface:#FCFAF3; --panel:#EDEFE9;
+    --border:#DFD8C9; --border-bright:#CFC6B2;
+    --light:#24231F; --dim:#666255; --faint:rgba(36,35,31,0.45);
+    --core:#8A6F4D; --horizon:#8A6F4D; --bh:#7A5F9E; --solar:#B3813E;
+    --planet:#46688F; --lunar:#8b8577; --plant:#5D8A6E; --animal:#8C4A3F;
+    --human:#24231F; --tech:#46688F; --veda:#A66038; --hot:#B3743A;
+  }
+  html[data-theme="dark"]{
+    --void:#03050a; --deep:#080c13; --surface:#0d141f; --panel:#121a28;
+    --border:rgba(120,160,220,0.12); --border-bright:rgba(120,160,220,0.28);
+    --light:#e8d9c0; --dim:rgba(232,217,192,0.55); --faint:rgba(232,217,192,0.36);
+    --core:#c8a96e; --horizon:#e8c87a; --bh:#b79be8; --solar:#e8c87a;
+    --planet:#6a8fd4; --lunar:#c2cbd9; --plant:#5db89a; --animal:#d47a5d;
+    --human:#e8d9c0; --tech:#6ccfd0; --veda:#e0824a; --hot:#fff2d6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  [hidden]{display:none !important;}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto;}*,*::before,*::after{animation:none!important;transition:none!important;}}
+  body{background:var(--void);color:var(--light);font-family:var(--f-serif);font-weight:400;font-size:15px;line-height:1.6;overflow-x:hidden;}
+
+  .shell{max-width:940px;margin:0 auto;padding:0 0.2rem 0.6rem;}
+
+  header{padding:0.2rem 0 0.8rem;border-bottom:1px solid var(--border);margin-bottom:1rem;}
+  .topbar{margin-top:0;}
+  #profileBtn{margin-right:auto;}
+  #themeBtn{font-size:14px;line-height:1;padding:0.34rem 0.6rem;}
+  .eyebrow{font-family:var(--f-sans);font-size:10px;letter-spacing:0.28em;color:var(--veda);text-transform:uppercase;margin-bottom:0.8rem;}
+  header h1{font-family:var(--f-serif);font-weight:300;font-size:clamp(1.9rem,5vw,2.9rem);line-height:1.08;color:var(--light);margin-bottom:0.5rem;}
+  header h1 em{font-style:italic;color:var(--veda);}
+  header .sub{font-family:var(--f-serif);font-style:italic;font-size:1.06rem;color:var(--dim);max-width:64ch;}
+  .topbar{display:flex;flex-wrap:wrap;gap:0.6rem;align-items:center;margin-top:1.2rem;}
+  .seg{display:inline-flex;border:1px solid var(--border-bright);border-radius:6px;overflow:hidden;}
+  .seg button{background:transparent;color:var(--dim);border:none;font-family:var(--f-sans);font-size:10px;letter-spacing:0.06em;padding:0.42rem 0.85rem;cursor:pointer;}
+  .seg button[aria-pressed="true"]{background:rgba(224,130,74,0.14);color:var(--veda);}
+  .btn{background:transparent;color:var(--dim);border:1px solid var(--border-bright);border-radius:6px;font-family:var(--f-sans);font-size:10px;letter-spacing:0.06em;padding:0.42rem 0.85rem;cursor:pointer;transition:color .2s,background .2s;}
+  .btn:hover,.btn:focus-visible{color:var(--veda);background:rgba(224,130,74,0.1);outline:none;}
+  .btn.primary{border-color:rgba(224,130,74,0.5);color:var(--horizon);}
+  .btn.ghost{border-color:var(--border);}
+
+  .badge{display:inline-block;font-family:var(--f-sans);font-size:8.5px;letter-spacing:0.08em;padding:0.14rem 0.46rem;border-radius:3px;margin-right:0.35rem;white-space:nowrap;vertical-align:middle;text-transform:uppercase;}
+  .badge.meas{color:var(--plant);border:1px solid rgba(93,184,154,0.45);}
+  .badge.est{color:var(--tech);border:1px solid rgba(108,207,208,0.42);}
+  .badge.model{color:var(--core);border:1px dashed rgba(200,169,110,0.5);}
+  .badge.veda{color:var(--veda);border:1px solid rgba(224,130,74,0.42);}
+  .badge.self{color:var(--bh);border:1px solid rgba(183,155,232,0.42);}
+  .badge.safe{color:var(--animal);border:1px solid rgba(212,122,93,0.5);}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+  @media (max-width:760px){.grid{grid-template-columns:1fr;}}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.15rem 1.2rem;}
+  .card.span{grid-column:1 / -1;}
+  .card .cap{font-family:var(--f-sans);font-size:9px;letter-spacing:0.16em;color:var(--faint);text-transform:uppercase;margin-bottom:0.9rem;display:flex;align-items:center;gap:0.5rem;justify-content:space-between;}
+  .card .cap .t{color:var(--horizon);}
+
+  /* сцена огня — всегда тёмное «окно», как канвас в «Питании» */
+  .stage{position:relative;display:flex;flex-direction:column;align-items:center;
+    background:radial-gradient(ellipse at 50% 42%,#141c2c,#0a0e16);
+    border:1px solid rgba(120,160,220,0.22);border-radius:12px;padding:0.7rem 0.8rem 1rem;}
+  .stage .phaseword{color:#e8c87a;}
+  .stage .phasecount{color:rgba(232,217,192,0.55);}
+  .stage .btn{color:rgba(232,217,192,0.75);border-color:rgba(120,160,220,0.3);}
+  .stage .btn:hover,.stage .btn:focus-visible{color:#e8c87a;background:rgba(224,130,74,0.12);}
+  .stage .btn.primary{color:#e8c87a;border-color:rgba(224,130,74,0.5);}
+  .stage .readout{color:rgba(232,217,192,0.55);}
+  .stage .readout .v{color:#e8c87a;}
+  .stage .hint{color:rgba(232,217,192,0.4);}
+  canvas#torus{width:100%;max-width:420px;height:320px;display:block;touch-action:manipulation;}
+  .phaseword{font-family:var(--f-serif);font-style:italic;font-size:1.5rem;color:var(--horizon);min-height:1.6em;margin-top:-0.2rem;letter-spacing:0.02em;}
+  .phasecount{font-family:var(--f-sans);font-size:12px;color:var(--dim);min-height:1.2em;}
+  .transport{display:flex;gap:0.6rem;flex-wrap:wrap;justify-content:center;margin:0.9rem 0 0.2rem;}
+  .transport .btn{font-size:11px;padding:0.5rem 1rem;}
+
+  .readout{display:flex;flex-wrap:wrap;gap:0.8rem 1.4rem;margin-top:0.9rem;font-family:var(--f-sans);font-size:11px;color:var(--dim);justify-content:center;}
+  .readout .v{color:var(--horizon);}
+  .hint{font-size:11.5px;color:var(--faint);line-height:1.55;margin-top:0.7rem;text-align:center;max-width:52ch;margin-left:auto;margin-right:auto;}
+
+  /* кнопка «Удар ♥» — под тороидом, чтобы видеть кольцо созвучия и нажимать не отвлекаясь */
+  .pulserow{display:flex;flex-direction:column;align-items:center;gap:0.4rem;margin:0.8rem 0 0.1rem;}
+  .btn.big{font-size:15px;padding:0.7rem 1.6rem;border-radius:10px;border-color:rgba(224,130,74,0.55);}
+  .stage .btn.big{color:#e8c87a;background:rgba(224,130,74,0.1);}
+  .stage .btn.big:hover,.stage .btn.big:focus-visible{background:rgba(224,130,74,0.2);}
+  .pulsehint{font-size:10.5px;color:rgba(232,217,192,0.4);text-align:center;max-width:40ch;}
+  .fieldnote{font-family:var(--f-sans);font-size:10.5px;color:var(--faint);font-style:italic;}
+
+  .chips{display:flex;flex-wrap:wrap;gap:0.5rem;}
+  .chip{background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:0.4rem 0.85rem;font-size:12px;color:var(--dim);cursor:pointer;transition:.15s;display:flex;align-items:center;gap:0.4rem;}
+  .chip[aria-pressed="true"]{border-color:rgba(224,130,74,0.5);color:var(--horizon);background:rgba(224,130,74,0.08);}
+  .chip small{font-family:var(--f-sans);font-size:9px;color:var(--faint);}
+  .protometa{font-size:12.5px;color:var(--dim);margin-top:0.9rem;line-height:1.55;}
+  .protometa b{color:var(--light);font-weight:500;}
+
+  .field{display:flex;align-items:center;gap:0.7rem;margin-top:0.9rem;font-family:var(--f-sans);font-size:11px;color:var(--dim);flex-wrap:wrap;}
+  input[type=range]{accent-color:var(--veda);flex:1;min-width:120px;}
+  .field .v{color:var(--horizon);min-width:6.2em;}
+
+  .toggle{display:flex;align-items:center;gap:0.55rem;font-family:var(--f-sans);font-size:10.5px;color:var(--dim);cursor:pointer;}
+  .toggle input{accent-color:var(--bh);width:16px;height:16px;}
+  .slider-row{margin:0.85rem 0;}
+  .slider-row .lab{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim);margin-bottom:0.3rem;}
+  .slider-row .lab .ends{font-family:var(--f-sans);font-size:9px;color:var(--faint);}
+  .checkin-note{font-size:11.5px;color:var(--faint);line-height:1.55;margin-top:0.6rem;}
+  .delta{font-family:var(--f-sans);font-size:11px;color:var(--plant);}
+
+  .meter{height:9px;border-radius:5px;background:var(--panel);overflow:hidden;margin:0.6rem 0 0.4rem;border:1px solid var(--border);}
+  .meter i{display:block;height:100%;background:linear-gradient(90deg,var(--veda),var(--horizon));width:0;transition:width .5s;}
+  .weekbars{display:flex;gap:6px;align-items:flex-end;height:74px;margin-top:0.4rem;}
+  .weekbars .d{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;}
+  .weekbars .bar{width:100%;background:var(--panel);border:1px solid var(--border);border-radius:3px 3px 0 0;position:relative;flex:1;display:flex;align-items:flex-end;}
+  .weekbars .bar i{display:block;width:100%;background:linear-gradient(180deg,var(--horizon),var(--veda));border-radius:3px 3px 0 0;transition:height .4s;}
+  .weekbars .dl{font-family:var(--f-sans);font-size:8.5px;color:var(--faint);}
+  .stat-row{display:flex;gap:1.6rem;flex-wrap:wrap;font-family:var(--f-sans);font-size:11px;color:var(--dim);margin-top:0.9rem;}
+  .stat-row .n{font-size:1.35rem;color:var(--horizon);display:block;line-height:1.1;font-weight:400;}
+  .log{list-style:none;margin-top:0.8rem;max-height:150px;overflow-y:auto;}
+  .log li{display:flex;justify-content:space-between;align-items:center;font-family:var(--f-sans);font-size:10.5px;color:var(--dim);padding:0.4rem 0;border-bottom:1px solid var(--border);gap:0.6rem;}
+  .log li .x{background:none;border:none;color:var(--faint);cursor:pointer;font-family:inherit;font-size:14px;padding:0 0.3rem;}
+  .log li .x:hover{color:var(--animal);}
+  .empty{font-size:12px;color:var(--faint);font-style:italic;font-family:var(--f-serif);}
+  .undo{font-size:10.5px;color:var(--bh);cursor:pointer;text-decoration:underline;background:none;border:none;font-family:var(--f-sans);}
+
+  select{background:var(--panel);color:var(--light);border:1px solid var(--border-bright);border-radius:6px;padding:0.4rem 0.6rem;font-family:var(--f-sans);font-size:11px;}
+  .biomsg{font-size:12px;color:var(--dim);line-height:1.6;margin-top:0.8rem;border-left:2px solid var(--tech);padding-left:0.8rem;}
+  .biomsg.tap{cursor:pointer;} .biomsg.tap:hover{color:var(--light);}
+  .helplink{background:none;border:none;border-bottom:1px dotted rgba(108,207,208,0.55);color:var(--tech);font-family:var(--f-sans);font-size:9.5px;letter-spacing:0.04em;cursor:pointer;padding:0 0 1px;white-space:nowrap;}
+  .helplink:hover,.helplink:focus-visible{color:var(--horizon);border-bottom-color:var(--horizon);outline:none;}
+  .modal ol{margin:0.5rem 0 1.1rem;padding-left:1.25rem;}
+  .modal ol li{color:var(--dim);font-size:13px;margin-bottom:0.55rem;line-height:1.55;max-width:66ch;}
+  .modal ol li b,.modal ol li strong{color:var(--light);font-weight:500;}
+  .modal .tip{font-size:11.5px;color:var(--faint);line-height:1.55;margin:-0.5rem 0 1rem;}
+  .modal .pick{font-family:var(--f-sans);font-size:11px;color:var(--horizon);}
+
+  /* биообратная связь · петля */
+  .loop{display:flex;gap:0.35rem;flex-wrap:wrap;margin:0.9rem 0 0.5rem;font-family:var(--f-sans);font-size:9px;letter-spacing:0.03em;color:var(--faint);align-items:center;}
+  .loop .st{padding:0.26rem 0.55rem;border:1px solid var(--border);border-radius:20px;transition:.2s;}
+  .loop .st.on{border-color:rgba(93,184,154,0.5);color:var(--plant);background:rgba(93,184,154,0.08);}
+  .loop .ar{color:var(--faint);}
+  .biolive{display:flex;flex-wrap:wrap;gap:0.7rem 1.4rem;font-family:var(--f-sans);font-size:11px;color:var(--dim);margin:0.6rem 0 0.2rem;}
+  .biolive .v{color:var(--horizon);}
+  .cohmeter{height:9px;border-radius:5px;background:var(--panel);overflow:hidden;margin:0.3rem 0 0.15rem;border:1px solid var(--border);}
+  .cohmeter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--planet),var(--plant));transition:width .3s;}
+  .qual{height:5px;border-radius:3px;background:var(--panel);overflow:hidden;margin-top:0.25rem;border:1px solid var(--border);}
+  .qual i{display:block;height:100%;width:0;background:var(--tech);transition:width .3s;}
+  .qlabel{font-family:var(--f-sans);font-size:8px;letter-spacing:0.1em;color:var(--faint);text-transform:uppercase;margin-top:0.3rem;}
+  video.cam{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--border);background:#000;}
+  .camrow{display:flex;gap:0.8rem;align-items:center;margin-top:0.7rem;}
+  .camrow span{font-size:11.5px;color:var(--faint);line-height:1.5;}
+
+  /* прогресс */
+  .prog-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.9rem;margin-top:0.3rem;}
+  @media (max-width:640px){.prog-grid{grid-template-columns:1fr;}}
+  .chartbox .cl{font-family:var(--f-sans);font-size:8.5px;letter-spacing:0.1em;color:var(--faint);text-transform:uppercase;margin-bottom:0.3rem;display:flex;justify-content:space-between;align-items:center;gap:0.4rem;}
+  canvas.spark{width:100%;height:66px;display:block;}
+  .prog-summary{font-size:12.5px;color:var(--dim);line-height:1.65;margin-top:1rem;border-left:2px solid var(--planet);padding-left:0.8rem;}
+  .prog-summary b{color:var(--horizon);font-weight:400;}
+  .reson{font-size:12.5px;color:var(--horizon);font-family:var(--f-serif);font-style:italic;margin-top:0.6rem;}
+
+  .scrim{position:fixed;inset:0;background:rgba(3,5,10,0.82);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding:2rem 1rem;z-index:50;overflow-y:auto;}
+  .modal{background:var(--deep);border:1px solid rgba(224,130,74,0.28);border-radius:12px;max-width:720px;width:100%;padding:1.8rem 1.7rem 2rem;}
+  .modal h2{font-family:var(--f-serif);font-weight:400;font-size:1.7rem;color:var(--light);margin-bottom:0.4rem;}
+  .modal h2 em{font-style:italic;color:var(--veda);}
+  .modal .close{float:right;}
+  .modal h3{font-family:var(--f-sans);font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--faint);margin:1.5rem 0 0.6rem;}
+  .modal p{color:var(--dim);margin-bottom:0.9rem;font-size:14px;max-width:66ch;}
+  .modal p strong{color:var(--light);font-weight:500;}
+  .modal .src-list{font-size:12px;color:var(--faint);line-height:1.75;}
+  .modal .src-list b{color:var(--dim);font-weight:400;}
+  .disc{font-size:11.5px;color:var(--faint);border-top:1px solid var(--border);margin-top:1.4rem;padding-top:1rem;line-height:1.6;}
+  .safe-block{background:rgba(212,122,93,0.06);border:1px solid rgba(212,122,93,0.3);border-radius:8px;padding:1rem 1.1rem;margin:1rem 0;}
+  .safe-block p{font-size:12.5px;color:var(--dim);margin:0;}
+  .eq{font-family:var(--f-sans);color:var(--horizon);}
+
+  footer{margin-top:2rem;text-align:center;font-family:var(--f-sans);font-size:10px;letter-spacing:0.12em;color:var(--border-bright);}
+  footer a{color:var(--veda);text-decoration:none;}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header>
+    <div class="topbar">
+      <button class="btn" id="profileBtn" title="Профиль и замеры тела — во вкладке «Динамика»">Профиль</button>
+      <span class="seg" role="group" aria-label="Режим">
+        <button id="modeSimple" aria-pressed="true">Просто</button>
+        <button id="modeFull" aria-pressed="false">Полно</button>
+      </span>
+      <button class="btn primary" id="openMethod">Инструкция · метод</button>
+      <button class="btn ghost" id="themeBtn" title="Светлая / тёмная тема" aria-label="Переключить тему">◐</button>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <!-- ═══ STAGE ═══ -->
+    <section class="card span" aria-label="Практика дыхания">
+      <div class="cap"><span>Сессия · дыхательный проводник <span class="badge model">модель</span></span><span class="t" id="stageProto">—</span></div>
+      <div class="stage">
+        <canvas id="torus" width="420" height="320" aria-hidden="true"></canvas>
+        <div class="phaseword" id="phaseWord" aria-live="polite">Готово</div>
+        <div class="phasecount" id="phaseCount"></div>
+        <div class="transport">
+          <button class="btn primary" id="startBtn">Начать</button>
+          <button class="btn" id="tapBtn" hidden>В такт</button>
+          <button class="btn ghost" id="stopBtn" hidden>Стоп</button>
+        </div>
+        <div class="readout">
+          <span>время <span class="v" id="roTime">0:00</span> <span class="badge meas">измерено</span></span>
+          <span>вдохов <span class="v" id="roBreaths">0</span> <span class="badge meas">измерено</span></span>
+          <span>ритм <span class="v" id="roPace">—</span> <span class="badge meas">измерено</span></span>
+          <span id="roAdhWrap" hidden>в такт <span class="v" id="roAdh">—</span> <span class="badge meas">измерено</span></span>
+        </div>
+        <div class="pulserow" id="pulseRow" hidden>
+          <button class="btn primary big" id="pulseBtn">Удар ♥</button>
+          <span class="pulsehint">Держите тороид в поле зрения и нажимайте на каждый толчок пульса</span>
+        </div>
+        <p class="hint" id="stageHint">Огонь и кольцо — иллюстрация, а не датчик. Измеряется то, что вы делаете: темп, время, число вдохов. Пробел — старт/пауза.</p>
+      </div>
+    </section>
+
+    <!-- ═══ PROTOCOL ═══ -->
+    <section class="card" aria-label="Выбор практики">
+      <div class="cap"><span>Практика <span class="badge est">клонировано · с источником</span></span></div>
+      <div class="chips" id="chips" role="group" aria-label="Протокол дыхания"></div>
+      <div class="field" id="cadenceField" hidden>
+        <label for="cadence">резонанс</label>
+        <input type="range" id="cadence" min="4.5" max="6.5" step="0.5" value="5.5">
+        <span class="v" id="cadenceV">5.5 / мин</span>
+      </div>
+      <div class="protometa" id="protoMeta"></div>
+    </section>
+
+    <!-- ═══ CHECK-IN ═══ -->
+    <section class="card" aria-label="Самонаблюдение">
+      <div class="cap"><span>Отметка состояния <span class="badge self">сам-отчёт</span></span>
+        <label class="toggle"><input type="checkbox" id="checkinOn"> вести</label></div>
+      <div id="checkinBody" hidden>
+        <div id="checkinPre">
+          <div class="slider-row">
+            <div class="lab"><span>Покой</span><span class="ends">возбуждён · спокоен</span></div>
+            <input type="range" min="1" max="5" step="1" value="3" data-ci="calm">
+          </div>
+          <div class="slider-row">
+            <div class="lab"><span>Опора в центре</span><span class="ends">зыбко · твёрдо</span></div>
+            <input type="range" min="1" max="5" step="1" value="3" data-ci="steady">
+          </div>
+          <div class="slider-row">
+            <div class="lab"><span>Тепло / тонус</span><span class="ends">тускло · ярко</span></div>
+            <input type="range" min="1" max="5" step="1" value="3" data-ci="warm">
+          </div>
+        </div>
+        <div class="delta" id="checkinDelta"></div>
+        <p class="checkin-note">Это не измерение центра, а ваш отчёт до и после. Смысл в паттерне за недели, не в одной сессии. Отметьте сейчас, а после «Стоп» — ещё раз.</p>
+      </div>
+      <p class="empty" id="checkinOff">Включите, чтобы отмечать самочувствие до и после практики.</p>
+    </section>
+
+    <!-- ═══ CHARGE ═══ -->
+    <section class="card" aria-label="Огонь центра">
+      <div class="cap"><span>Огонь центра <span class="badge model">модель · метафора</span></span></div>
+      <div class="meter"><i id="chargeBar"></i></div>
+      <div class="protometa"><b id="chargePct">0%</b> — растёт от постоянства, тускнеет без ухода. Это мотивирующая метафора «агни», а не показатель здоровья. Огонь держат ровным ритмом, а не одним жарким рывком.</div>
+    </section>
+
+    <!-- ═══ WEEK ═══ -->
+    <section class="card" aria-label="Неделя">
+      <div class="cap"><span>Неделя <span class="badge meas">измерено</span></span></div>
+      <div class="weekbars" id="weekBars"></div>
+      <div class="stat-row">
+        <span><span class="n" id="statStreak">0</span>дней подряд</span>
+        <span><span class="n" id="statMin">0</span>минут за 7 дней</span>
+        <span><span class="n" id="statSess">0</span>сессий</span>
+      </div>
+      <ul class="log" id="log"></ul>
+      <div id="undoWrap" hidden style="margin-top:.5rem"><button class="undo" id="undoBtn">↩ вернуть удалённую сессию</button></div>
+    </section>
+
+    <!-- ═══ BIO · ПЕТЛЯ ═══ -->
+    <section class="card span full-only" aria-label="Биообратная связь · замкнутая петля">
+      <div class="cap"><span>Биообратная связь · замкнутая петля <span class="badge est">оценка · с датчиком</span></span><button class="helplink" id="bioHelp" type="button">как подключить ⓘ</button></div>
+      <div class="field">
+        <label for="bioSrc">источник</label>
+        <select id="bioSrc">
+          <option value="none">Не подключён</option>
+          <option value="ble">Браслет / датчик · Bluetooth</option>
+          <option value="tap">Отсчёт пульса (касание)</option>
+          <option value="camera">Камера · PPG</option>
+        </select>
+        <span class="fieldnote" id="pulseHintField" hidden>кнопка «Удар ♥» — под тороидом выше</span>
+      </div>
+      <div class="camrow" id="camRow" hidden>
+        <video class="cam" id="cam" muted playsinline></video>
+        <canvas id="ppgCanvas" width="48" height="48" hidden></canvas>
+        <span>Прижмите кончик пальца к камере (и вспышке, если есть). Держите ровно — пульс появится через несколько секунд.</span>
+      </div>
+      <div class="loop" id="loopDiag" hidden>
+        <span class="st" data-st="breath">Дыхание</span><span class="ar">→</span>
+        <span class="st" data-st="signal">Сигнал ♥</span><span class="ar">→</span>
+        <span class="st" data-st="coh">Созвучие</span><span class="ar">→</span>
+        <span class="st" data-st="adjust">Правка ритма</span>
+      </div>
+      <div class="biolive" id="bioLive" hidden>
+        <span>пульс <span class="v" id="bioHr">—</span></span>
+        <span>ВСР (RMSSD) <span class="v" id="bioHrv">—</span></span>
+        <span>созвучие <span class="v" id="bioCoh">—</span></span>
+      </div>
+      <div id="cohWrap" hidden>
+        <div class="cohmeter"><i id="cohBar"></i></div>
+        <div class="qual"><i id="qualBar"></i></div>
+        <div class="qlabel">качество сигнала</div>
+      </div>
+      <div class="biomsg tap" id="bioMsg" role="button" tabindex="0" title="Инструкция: как подключить датчик"></div>
+    </section>
+
+    <!-- ═══ PROGRESS ═══ -->
+    <section class="card span full-only" aria-label="Прогресс">
+      <div class="cap"><span>Прогресс · сбор данных, анализ, визуализация</span></div>
+      <div class="prog-grid">
+        <div class="chartbox"><div class="cl"><span>В такт, %</span><span class="badge meas">измерено</span></div><canvas class="spark" id="progAdh" width="260" height="66"></canvas></div>
+        <div class="chartbox"><div class="cl"><span>Сдвиг покоя</span><span class="badge self">сам-отчёт</span></div><canvas class="spark" id="progCalm" width="260" height="66"></canvas></div>
+        <div class="chartbox"><div class="cl"><span>Созвучие, %</span><span class="badge est">оценка</span></div><canvas class="spark" id="progCoh" width="260" height="66"></canvas></div>
+      </div>
+      <div class="prog-summary" id="progSummary"></div>
+      <div class="reson" id="progReson"></div>
+    </section>
+
+  </div>
+
+</div>
+
+<!-- ═══ BIO HELP MODAL ═══ -->
+<div class="scrim" id="bioHelpScrim" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="bhTitle">
+    <button class="btn ghost close" id="closeBioHelp">закрыть ✕</button>
+    <h2 id="bhTitle">Как подключить <em>датчик</em></h2>
+    <p>Петля читает ваш пульс и показывает созвучие сердца с дыханием. Источник пульса на выбор — надёжное касание или камера. Числа появятся только при хорошем сигнале; выдумывать их приложение не станет.</p>
+
+    <h3>Вариант 1 · Браслет или нагрудный датчик · Bluetooth</h3>
+    <p class="tip">Самый точный источник: устройство отдаёт межударные интервалы (RR) напрямую. Работает в Chrome / Opera / Edge по HTTPS.</p>
+    <ol>
+      <li>Включите на устройстве <strong>режим передачи пульса</strong> (Broadcast HR / Share heart rate): Garmin — настройки датчиков; Polar/нагрудные ремни — транслируют всегда; Amazfit/Zepp — «Обнаружение» в настройках; Mi Band — через приложение Zepp Life.</li>
+      <li>В поле «источник» выберите <span class="pick">Браслет / датчик · Bluetooth</span> — браузер покажет список устройств; выберите своё.</li>
+      <li>Нажмите <strong>Начать</strong> и дышите с проводником — созвучие считается из настоящих RR-интервалов.</li>
+      <li>Часы Apple Watch напрямую не транслируют пульс по BLE — используйте камеру или касание.</li>
+    </ol>
+
+    <h3>Вариант 2 · Отсчёт пульса касанием</h3>
+    <p class="tip">Работает всегда, без разрешений и камеры. Грубее оптики, но честно.</p>
+    <ol>
+      <li>В поле «источник» выберите <span class="pick">Отсчёт пульса (касанием)</span>.</li>
+      <li>Найдите пульс — на запястье или сбоку шеи (сонная артерия).</li>
+      <li>Нажмите <strong>Начать</strong> и дышите с проводником — петля считает созвучие только во время дыхания.</li>
+      <li>Кнопка <strong>Удар ♥</strong> появится прямо под тороидом — так видно кольцо созвучия и пульс не нужно искать глазами. На каждый толчок нажимайте её; держите ровный темп ~20–30 ударов, чтобы набралась оценка.</li>
+    </ol>
+
+    <h3>Вариант 3 · Камера · PPG</h3>
+    <p class="tip">Точнее, но капризна к свету и стабильности. Оптическая плетизмография — оценка пульса по цвету пальца.</p>
+    <ol>
+      <li>Выберите <span class="pick">Камера · PPG</span>. Браузер спросит доступ к камере — <strong>разрешите</strong>.</li>
+      <li>Плотно прижмите кончик пальца к <strong>задней камере</strong> (и к вспышке, если она рядом) — палец должен полностью закрыть объектив.</li>
+      <li>Держите руку неподвижно, палец тёплым; добавьте света или вспышку. Пульс проступит через несколько секунд.</li>
+      <li>Нажмите <strong>Начать</strong> и дышите — кольцо созвучия и шкала оживут.</li>
+    </ol>
+    <div class="safe-block">
+      <p><span class="badge safe">важно</span>В этом окне-песочнице доступ к камере часто <strong>заблокирован</strong> — это ограничение среды, не ошибка. Тогда используйте «Отсчёт пульса». Камера работает на защищённом сайте (https) или в установленном приложении, где вы дали разрешение.</p>
+    </div>
+
+    <h3>Как замыкается петля</h3>
+    <ol>
+      <li><strong>Дыхание</strong> — ведите ровный резонансный ритм проводником.</li>
+      <li><strong>Сигнал ♥</strong> — датчик слышит пульс (нужно достаточное качество — видно по шкале снизу).</li>
+      <li><strong>Созвучие</strong> — приложение оценивает дыхательную аритмию: растёт ли пульс на вдохе, падает ли на выдохе.</li>
+      <li><strong>Правка</strong> — чуть медленнее, глубже, ровнее выдох: следите, как поднимается кольцо и шкала созвучия. Так вы ищете свою резонансную вершину.</li>
+    </ol>
+
+    <h3>Если не получается</h3>
+    <ol>
+      <li><strong>Нет чисел</strong> — сигнал слишком слаб, и это честно: прижмите палец плотнее, добавьте света, держите ровно, либо перейдите на касание.</li>
+      <li><strong>«слушаю…»</strong> — идёт сбор ударов; дышите ровно ещё несколько циклов.</li>
+      <li><strong>Камера не включилась</strong> — доступ не дан или блокирован средой; выберите «Отсчёт пульса».</li>
+      <li>После <strong>Стоп</strong> медиана созвучия за сессию попадёт в «Прогресс» — там виден тренд и личный резонанс.</li>
+    </ol>
+
+    <p class="disc">Созвучие — оценка по шумному сигналу (камера/касание), а не клинический показатель и не «уровень чакры». Приложение не ставит диагнозов. Подробнее о слоях честности — в «Метод и границы».</p>
+  </div>
+</div>
+
+<!-- ═══ METHOD MODAL ═══ -->
+<div class="scrim" id="methodScrim" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <button class="btn ghost close" id="closeMethod">закрыть ✕</button>
+    <h2 id="mTitle">Тороид центра — <em>солнечное сплетение</em></h2>
+    <p>Дыхание, внимание к телу и внутренний огонь. Традиция называет этот центр
+      Манипурой; под метафорой — обычная физиология диафрагмы и блуждающего нерва.
+      Практика укрепляет его тем, чем действительно можно управлять: ровным медленным
+      дыханием и замкнутой петлёй обратной связи.</p>
+
+    <h3>Как заниматься</h3>
+    <p>Выберите протокол — основа здесь «Когерентное» дыхание, ровный вдох и выдох
+      около 5–6 циклов в минуту. Нажмите «Начать» и дышите с проводником: кольцо
+      раскрывается на вдохе, огонь разгорается от ровности. Несколько минут в день
+      важнее длинных редких подходов.</p>
+    <p>Ползунок «резонанс» подстраивает темп: у каждого своя частота, на которой
+      сердце и дыхание сцепляются легче всего. С датчиком пульса приложение само
+      покажет, на каком темпе созвучие выше — это и есть ваш личный резонанс.</p>
+
+    <h3>Что показывают числа</h3>
+    <p>Каждая цифра честно помечена своим слоем. <strong>Измерено</strong> — время,
+      вдохи, темп, серия дней. <strong>Оценка</strong> — пульс и созвучие с датчика:
+      сигнал бывает шумным, и без достаточного качества числа не показываются.
+      <strong>Модель</strong> — огонь, кольцо и «заряд центра»: мотивирующая метафора
+      постоянства, не показатель здоровья. <strong>Сам-отчёт</strong> — ваши отметки
+      до и после. Смысл в паттерне за недели, а не в одной сессии.</p>
+
+    <h3>Откуда это</h3>
+    <p>Солнечное сплетение — крупнейший вегетативный узел брюшной полости; медленное
+      диафрагмальное дыхание около 0,1 Гц попадает в резонанс барорефлекса и растит
+      вариабельность ритма сердца. Физиологический вздох — быстрый проверенный способ
+      успокоиться. «Манипура» и «огонь» — язык традиции, мост к смыслу; физиология под
+      ним — установленная. Дыхание — сам-регуляция, а не лечение.</p>
+
+    <div class="safe-block">
+      <p><span class="badge safe">безопасность</span><strong>Интенсивные техники</strong>
+      (огненное дыхание, длинные задержки) — не при беременности, неконтролируемой
+      гипертонии, болезнях сердца, глаукоме, эпилепсии. Никогда — в воде или за рулём.
+      Головокружение — остановитесь и дышите обычно. Медленное когерентное дыхание
+      безопасно почти всем; при сомнениях — спросите врача.</p>
+    </div>
+
+    <p class="src-list">Источники: Lehrer &amp; Gevirtz 2014 и Laborde 2022 (медленное
+      дыхание и ВСР) · Vaschillo (резонанс барорефлекса) · Balban 2023 (физиологический
+      вздох) · Craig 2009 (интероцепция) · Benson 1982, Kozhevnikov 2013 (туммо).</p>
+
+    <p class="disc">Это иллюстрация вашей практики, а не измерение здоровья.
+      Приложение не ставит диагнозов и не заменяет медицинскую помощь.</p>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ══════════════════════════════════════════════════════════════════════
+   Тороид центра — чистая архитектура в одном файле.
+   Поток:  NORMS → DOMAIN(чистое) → ADAPTERS(порты) → STATE → DERIVE → RENDER(fail-soft) → ENGINE → WIRING
+   Правила проекта: домен не знает про DOM; магические числа — в NORMS;
+   внешние источники — за портами; каждый рендер в try/catch; вход клампится;
+   никакого localStorage без обёртки; XSS-safe; reduced-motion уважается.
+   Петля (принцип обратной связи): дыхание → сигнал сердца → созвучие → правка.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════ NORMS · единственный конфиг ═══════════════ */
+const NORMS = {
+  protocols: {
+    coherent: { name:'Когерентное', tag:'резонанс ~0,1 Гц', cadence:true,
+      note:'Ровный вдох = выдох. Резонанс барорефлекса, растит ВСР. Основа практики — начните с него.',
+      src:'Lehrer 2014', vigorous:false,
+      build:(bpm)=>{ const h=30/clamp(bpm,4.5,6.5); return [
+        {label:'Вдох', sec:h, kind:'in',  from:0, to:1},
+        {label:'Выдох',sec:h, kind:'out', from:1, to:0} ]; } },
+    box: { name:'Бокс 4·4·4·4', tag:'устойчивость', cadence:false,
+      note:'Квадратный очаг: равные вдох, задержка, выдох, задержка. Собирает и заземляет.',
+      src:'прикладная практика', vigorous:false,
+      build:()=>[ {label:'Вдох',sec:4,kind:'in',from:0,to:1},{label:'Задержка',sec:4,kind:'hold',from:1,to:1},
+                  {label:'Выдох',sec:4,kind:'out',from:1,to:0},{label:'Задержка',sec:4,kind:'hold',from:0,to:0} ] },
+    sigh: { name:'Физиологический вздох', tag:'быстрый покой', cadence:false,
+      note:'Двойной вдох носом + долгий выдох ртом. Самый быстрый доказанный способ успокоиться в моменте.',
+      src:'Balban 2023', vigorous:false,
+      build:()=>[ {label:'Вдох',sec:2,kind:'in',from:0,to:0.72},{label:'Довдох',sec:1,kind:'in',from:0.72,to:1},
+                  {label:'Долгий выдох',sec:6,kind:'out',from:1,to:0} ] },
+    r478: { name:'4-7-8', tag:'расслабление', cadence:false,
+      note:'Вдох 4 · задержка 7 · выдох 8. Мягкий тормоз для вечера и тревоги.',
+      src:'пранаяма · Weil', vigorous:false,
+      build:()=>[ {label:'Вдох',sec:4,kind:'in',from:0,to:1},{label:'Задержка',sec:7,kind:'hold',from:1,to:1},
+                  {label:'Выдох',sec:8,kind:'out',from:1,to:0} ] },
+    belly: { name:'Диафрагмальное', tag:'основа', cadence:false,
+      note:'Медленно, животом. Рука на солнечном сплетении — чувствуйте, как поднимается. Тренирует интероцепцию.',
+      src:'основа', vigorous:false,
+      build:()=>[ {label:'Вдох животом',sec:4,kind:'in',from:0,to:1},{label:'Мягкий выдох',sec:6,kind:'out',from:1,to:0} ] },
+    fire: { name:'Огненное (мягко)', tag:'Агни · с осторожностью', cadence:false,
+      note:'Традиционное «дыхание огня» стихии Манипуры: активные короткие циклы. Делайте короткими подходами.',
+      src:'бхастрика/капалабхати (мягко)', vigorous:true,
+      build:()=>[ {label:'Вдох',sec:1.2,kind:'in',from:0,to:1},{label:'Активный выдох',sec:1.2,kind:'out',from:1,to:0} ] },
+  },
+  order: ['coherent','box','sigh','r478','belly','fire'],
+  simpleOrder: ['coherent','sigh','belly'],
+  charge: { decayPerDay:0.90, sessionCredit:0.5, creditCapMin:20 },   // модель
+  sessionCapMin: 60,
+  ppg: { minIBI:300, maxIBI:1500, bufSamples:300, minQual:0.35, capIBIs:80 }, // границы датчика
+  coh: { minBeats:6, windowS:30, rsaGain:8, wR:0.5 },                 // настройка созвучия
+};
+
+/* ═══════════════ DOMAIN · чистые функции (без DOM) ═══════════════ */
+function clamp(x,lo,hi){ x=Number(x); if(!isFinite(x)) return lo; return x<lo?lo:x>hi?hi:x; }
+function easeBreath(p){ return 0.5-0.5*Math.cos(Math.PI*clamp(p,0,1)); }
+function mean(a){ return a.length? a.reduce((s,x)=>s+x,0)/a.length : 0; }
+function median(a){ if(!a.length) return null; const v=[...a].sort((p,q)=>p-q); const m=Math.floor((v.length-1)/2); return v.length%2?v[m]:(v[m]+v[m+1])/2; }
+function std(a){ if(a.length<2) return 0; const m=mean(a); return Math.sqrt(mean(a.map(x=>(x-m)*(x-m)))); }
+function pearson(x,y){ const n=Math.min(x.length,y.length); if(n<3) return 0;
+  const mx=mean(x.slice(0,n)), my=mean(y.slice(0,n)); let sxy=0,sx=0,sy=0;
+  for(let i=0;i<n;i++){ const dx=x[i]-mx, dy=y[i]-my; sxy+=dx*dy; sx+=dx*dx; sy+=dy*dy; }
+  const d=Math.sqrt(sx*sy); return d>0? sxy/d : 0; }
+
+function phasesFor(protoKey, bpm){
+  const p = NORMS.protocols[protoKey]; if(!p) return NORMS.protocols.coherent.build(bpm);
+  try { return p.build(bpm); } catch(e){ return NORMS.protocols.coherent.build(5.5); }
+}
+function cycleSeconds(phases){ return phases.reduce((s,ph)=>s+ph.sec,0); }
+function paceBpm(phases){ const c=cycleSeconds(phases); return c>0? 60/c : 0; }
+function phaseAt(phases, elapsedS){
+  const cyc = cycleSeconds(phases); if(cyc<=0) return {idx:0,label:'',kind:'hold',progress:0,exp:0,cyc:0,tLeft:0};
+  let t = elapsedS % cyc, i=0;
+  while(i<phases.length && t>=phases[i].sec){ t-=phases[i].sec; i++; }
+  if(i>=phases.length) i=phases.length-1;
+  const ph=phases[i], prog = ph.sec>0? t/ph.sec : 1;
+  const exp = ph.from + (ph.to-ph.from)*easeBreath(prog);
+  return { idx:i, label:ph.label, kind:ph.kind, progress:prog, exp:clamp(exp,0,1), cyc, tLeft:Math.ceil(ph.sec - t) };
+}
+function breathCount(phases, elapsedS){ const c=cycleSeconds(phases); return c>0? Math.floor(elapsedS/c) : 0; }
+
+function adherence(taps, targetCycleS){
+  if(!taps || taps.length<3 || targetCycleS<=0) return null;
+  const iv=[]; for(let i=1;i<taps.length;i++) iv.push((taps[i]-taps[i-1])/1000);
+  const err = iv.reduce((s,x)=>s+Math.abs(x-targetCycleS),0)/iv.length;
+  return clamp(1 - err/targetCycleS, 0, 1);
+}
+
+// ВСР: RMSSD по межударным интервалам (мс). Оценка.
+function rmssd(ibis){ if(!ibis||ibis.length<3) return null; let s=0,n=0;
+  for(let i=1;i<ibis.length;i++){ const d=ibis[i].ibi-ibis[i-1].ibi; s+=d*d; n++; } return Math.sqrt(s/n); }
+
+// СОЗВУЧИЕ (петля): насколько пульс поднимается на вдохе и падает на выдохе (RSA), сцеплён ли с дыханием.
+// expAt(es) — «раскрытие» дыхания в момент es (сек от startWall). Оценка/иллюстративно, не клиника.
+function coherence(ibis, expAt, startWall, accumMs, cfg){
+  if(!ibis||ibis.length<cfg.minBeats+1) return null;
+  const cutoff = Date.now() - cfg.windowS*1000;
+  const seg = ibis.filter(b=> b.t>=startWall && b.t>=cutoff);
+  if(seg.length < cfg.minBeats) return null;
+  const hrs=[], dexp=[], inh=[], exh=[];
+  for(let i=1;i<seg.length;i++){
+    const b=seg[i], p=seg[i-1];
+    const hr=60000/b.ibi;
+    const es2=(accumMs + (b.t-startWall))/1000, es1=(accumMs + (p.t-startWall))/1000;
+    const de = expAt(es2)-expAt(es1);           // изменение дыхания за этот удар
+    hrs.push(hr); dexp.push(de);
+    if(de>0) inh.push(hr); else if(de<0) exh.push(hr);
+  }
+  const r = pearson(hrs, dexp);                  // сцепление пульса с фазой дыхания
+  const mAll=mean(hrs);
+  const rsa = (inh.length && exh.length && mAll>0)? (mean(inh)-mean(exh))/mAll : 0;
+  const coh = clamp(cfg.wR*Math.max(r,0) + (1-cfg.wR)*clamp(rsa*cfg.rsaGain,0,1), 0, 1);
+  return { coh, hr: median(seg.map(b=>60000/b.ibi)), rmssd: rmssd(seg), n: seg.length };
+}
+
+// «Огонь центра» — иллюстративная модель постоянства (метафора агни), не показатель здоровья.
+function chargeFrom(history, now){
+  if(!history || !history.length) return 0;
+  const day = d => { const x=new Date(d); x.setHours(0,0,0,0); return x.getTime(); };
+  const byDay={}; history.forEach(s=>{ const k=day(s.date); byDay[k]=(byDay[k]||0)+ (s.durationMs/60000); });
+  const days=Object.keys(byDay).map(Number).sort((a,b)=>a-b);
+  let ch=0, cur=days[0]; const today=day(now.getTime());
+  while(cur<=today){ ch*=NORMS.charge.decayPerDay;
+    if(byDay[cur]) ch += clamp(byDay[cur]/NORMS.charge.creditCapMin,0,1)*NORMS.charge.sessionCredit;
+    ch=clamp(ch,0,1); cur+=86400000; }
+  return ch;
+}
+function streakDays(history, now){
+  if(!history||!history.length) return 0;
+  const day=d=>{const x=new Date(d);x.setHours(0,0,0,0);return x.getTime();};
+  const set=new Set(history.map(s=>day(s.date)));
+  let d=day(now.getTime()), n=0;
+  if(!set.has(d)) d-=86400000;
+  while(set.has(d)){ n++; d-=86400000; }
+  return n;
+}
+function weekBuckets(history, now){
+  const day=d=>{const x=new Date(d);x.setHours(0,0,0,0);return x.getTime();};
+  const out=[]; for(let i=6;i>=0;i--){ const k=day(now.getTime()-i*86400000);
+    const min=(history||[]).filter(s=>day(s.date)===k).reduce((a,s)=>a+s.durationMs/60000,0);
+    out.push({key:k, min, label:new Date(k).toLocaleDateString('ru-RU',{weekday:'short'})[0].toUpperCase()}); }
+  return out;
+}
+// Сбор → анализ: серии для графиков, медианы, тренды, личный резонанс.
+function progressData(history){
+  const s=[...(history||[])].sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const adh = s.map(x=> x.adherence==null? null : x.adherence);
+  const calm= s.map(x=> x.calmDelta!=null? x.calmDelta
+              : (x.checkin&&x.checkin.pre&&x.checkin.post? x.checkin.post.calm-x.checkin.pre.calm : null));
+  const coh = s.map(x=> x.coherence==null? null : x.coherence);
+  const med = a=>median(a.filter(v=>v!=null));
+  const trend = a=>{ const v=a.filter(x=>x!=null); if(v.length<4) return 0;
+    const h=Math.floor(v.length/2), m1=mean(v.slice(0,h)), m2=mean(v.slice(h));
+    return m2>m1*1.03?1:m2<m1*0.97?-1:0; };
+  const byCad={}; s.forEach(x=>{ if(x.coherence!=null && x.cadence){ const k=(Math.round(x.cadence*2)/2).toFixed(1); (byCad[k]=byCad[k]||[]).push(x.coherence);} });
+  let reson=null, best=-1; Object.keys(byCad).forEach(k=>{ const m=median(byCad[k]); if(m>best){best=m;reson=k;} });
+  const cadCount=Object.keys(byCad).length;
+  return { adh, calm, coh, n:s.length,
+    adhMed:med(adh), adhTrend:trend(adh),
+    calmMean:(calm.filter(x=>x!=null).length? mean(calm.filter(x=>x!=null)):null),
+    cohMed:med(coh), cohTrend:trend(coh),
+    reson:(reson && cadCount>=2 && byCad[reson].length>=2)? reson : null };
+}
+
+/* ═══════════════ ADAPTERS · порты к внешнему миру ═══════════════ */
+// Персистентность: в артефакте localStorage падает → try/catch + память.
+const store = (()=>{ let mem={}; const ok=(()=>{try{const k='__t';localStorage.setItem(k,'1');localStorage.removeItem(k);return true;}catch(e){return false;}})();
+  return {
+    get(k){ try{ return ok? JSON.parse(localStorage.getItem(k)||'null') : (mem[k]??null); }catch(e){ return mem[k]??null; } },
+    set(k,v){ try{ mem[k]=v; if(ok) localStorage.setItem(k,JSON.stringify(v)); }catch(e){ mem[k]=v; } }
+  };
+})();
+
+// Датчик пульса: единый поток межударных интервалов для двух источников — касание и камера-PPG.
+// Оба кормят один код созвучия. Никаких выдуманных чисел: качество ниже порога — цифры не показываем.
+const sensor = {
+  mode:'none', streaming:false, ibis:[], lastBeat:0, hr:null, quality:0, lastError:'',
+  _stream:null, _raf:null, _base:0, _amp:0, _lastAc:0, _ampOK:false, _bleDev:null, _bleT:0,
+
+  pushBeat(t){
+    if(this.lastBeat){ const ibi=t-this.lastBeat;
+      if(ibi>=NORMS.ppg.minIBI && ibi<=NORMS.ppg.maxIBI){ this.ibis.push({t,ibi}); if(this.ibis.length>NORMS.ppg.capIBIs) this.ibis.shift(); } }
+    this.lastBeat=t;
+    const recent=this.ibis.slice(-8);
+    if(recent.length>=3){ const arr=recent.map(x=>x.ibi); this.hr=60000/median(arr);
+      const cv=std(arr)/(mean(arr)||1); let q=clamp(1-cv*3,0,1);
+      if(this.mode==='camera' && !this._ampOK) q=Math.min(q,0.2);
+      if(this.mode==='tap') q=Math.min(q,0.85);   // касание грубее оптики
+      this.quality=q; }
+  },
+  tap(){ if(this.mode==='tap' && this.streaming) this.pushBeat(Date.now()); },
+
+  // Прямая запись межударного интервала (браслет отдаёт RR готовыми — точнее любой оптики здесь).
+  pushIbi(t,ibi){
+    if(ibi>=NORMS.ppg.minIBI && ibi<=NORMS.ppg.maxIBI){
+      this.ibis.push({t,ibi}); if(this.ibis.length>NORMS.ppg.capIBIs) this.ibis.shift();
+      const recent=this.ibis.slice(-8);
+      if(recent.length>=3){ const arr=recent.map(x=>x.ibi); this.hr=60000/median(arr);
+        const cv=std(arr)/(mean(arr)||1); this.quality=clamp(1-cv*2,0,1); } // RR с датчика — доверие выше
+    }
+  },
+  // Подписка на пульс устройства (общая для ручного выбора и автоподключения).
+  async _attachHr(dev){
+    try{
+      const server=await dev.gatt.connect();
+      const svc=await server.getPrimaryService('heart_rate');
+      const ch=await svc.getCharacteristic('heart_rate_measurement');
+      await ch.startNotifications();
+      ch.addEventListener('characteristicvaluechanged',e=>this._onBle(e.target.value));
+      dev.addEventListener('gattserverdisconnected',()=>{ if(this.mode==='ble'){ this.streaming=false; this.lastError='Браслет отключился — переподключите в поле «источник».'; } });
+      this._bleDev=dev; this.mode='ble'; this.streaming=true; return {ok:true};
+    }catch(e){ return {ok:false, reason:(e&&e.name)||'ble-error'}; }
+  },
+  // Тихое переподключение к уже разрешённому браслету (без диалога выбора).
+  async startBleKnown(){
+    try{
+      if(!navigator.bluetooth||!navigator.bluetooth.getDevices) return {ok:false, reason:'no-getdevices'};
+      const devs=await navigator.bluetooth.getDevices();
+      if(!devs||!devs.length) return {ok:false, reason:'no-known'};
+      this.stop();
+      return await this._attachHr(devs[0]);
+    }catch(e){ return {ok:false, reason:(e&&e.name)||'ble-error'}; }
+  },
+  _onBle(dv){
+    try{
+      const flags=dv.getUint8(0); let off=1;
+      const hr = (flags&0x1)? dv.getUint16(off,true) : dv.getUint8(off); off += (flags&0x1)?2:1;
+      if(flags&0x8) off+=2;                              // energy expended — пропустить
+      const now=Date.now();
+      if(flags&0x10){                                    // RR-интервалы присутствуют
+        const rrs=[]; while(off+1<dv.byteLength){ rrs.push(dv.getUint16(off,true)*1000/1024); off+=2; }
+        let t=now - rrs.reduce((s,x)=>s+x,0);
+        rrs.forEach(rr=>{ t+=rr; this.pushIbi(t,rr); });
+      } else if(hr>30&&hr<220){ this.pushIbi(now,60000/hr); } // датчик без RR — синтез из ЧСС
+    }catch(e){ /* повреждённый пакет не роняет петлю */ }
+  },
+
+  stop(){ try{ if(this._raf){cancelAnimationFrame(this._raf);this._raf=null;} }catch(e){}
+    try{ if(this._stream){ this._stream.getTracks().forEach(tr=>tr.stop()); this._stream=null; } }catch(e){}
+    try{ if(this._bleDev && this._bleDev.gatt && this._bleDev.gatt.connected) this._bleDev.gatt.disconnect(); }catch(e){}
+    this._bleDev=null;
+    try{ const v=document.getElementById('cam'); if(v) v.srcObject=null; }catch(e){}
+    this.mode='none'; this.streaming=false; this.ibis=[]; this.lastBeat=0; this.hr=null; this.quality=0; this._base=0; this._amp=0; this._lastAc=0; this._ampOK=false;
+  },
+
+  async start(mode){
+    this.stop();
+    if(mode==='tap'){ this.mode='tap'; this.streaming=true; return {ok:true}; }
+    if(mode==='ble'){
+      try{
+        if(!navigator.bluetooth) return {ok:false, reason:'no-ble'};
+        const dev=await navigator.bluetooth.requestDevice({filters:[{services:['heart_rate']}]});
+        return await this._attachHr(dev);
+      }catch(e){ return {ok:false, reason:(e&&e.name)||'ble-error'}; }
+    }
+    if(mode==='camera'){
+      try{
+        if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return {ok:false, reason:'no-api'};
+        const stream=await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment', width:{ideal:320}, height:{ideal:240} }, audio:false });
+        this._stream=stream; const v=document.getElementById('cam'); v.srcObject=stream;
+        try{ await v.play(); }catch(e){}
+        const track=stream.getVideoTracks()[0];
+        try{ const caps=track.getCapabilities && track.getCapabilities(); if(caps && caps.torch){ await track.applyConstraints({advanced:[{torch:true}]}); } }catch(e){}
+        this.mode='camera'; this.streaming=true; this._sample(); return {ok:true};
+      }catch(e){ return {ok:false, reason:(e && e.name) || 'error'}; }
+    }
+    return {ok:false, reason:'unknown'};
+  },
+
+  _sample(){
+    if(!this.streaming || this.mode!=='camera'){ return; }
+    try{
+      const v=document.getElementById('cam'), c=document.getElementById('ppgCanvas');
+      if(v && v.readyState>=2){ const g=c.getContext('2d'); const W=c.width, H=c.height;
+        g.drawImage(v,0,0,W,H); const data=g.getImageData(W*0.3,H*0.3,W*0.4,H*0.4).data;
+        let r=0,n=0; for(let i=0;i<data.length;i+=4){ r+=data[i]; n++; }
+        const val=r/(n||1);                                 // средний красный: пульс = провал яркости
+        this._base = this._base? this._base+0.05*(val-this._base) : val;
+        const ac = this._base - val;                        // >0 на систоле
+        this._amp = this._amp + 0.05*(Math.abs(ac)-this._amp);
+        this._ampOK = this._amp>1.2;                        // порог над шумом
+        const thr = this._amp*0.5;
+        if(this._lastAc<=thr && ac>thr && this._ampOK){ this.pushBeat(performance.timeOrigin? (performance.timeOrigin+performance.now()) : Date.now()); }
+        this._lastAc = ac;
+      }
+    }catch(e){ /* fail-soft: один кадр не роняет петлю */ }
+    this._raf=requestAnimationFrame(()=>this._sample());
+  }
+};
+const notify = { schedule(){ /* прод: push/сервис-воркер */ } };
+
+/* ═══════════════ STATE · единственный источник истины ═══════════════ */
+const state = {
+  mode:'simple',
+  protocol:'coherent',
+  cadence:5.5,
+  session:{ running:false, startWall:0, accumMs:0, taps:[], cohSamples:[], phases:phasesFor('coherent',5.5) },
+  checkin:{ on:false, pre:null, post:null },
+  history: store.get('t_history') || [],
+  lastDeleted:null,
+  bio:{ mode:'none' },
+  now: new Date(),
+};
+const reduced = window.matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+/* ═══════════════ DERIVE · селекторы над состоянием ═══════════════ */
+function elapsedMs(){ const s=state.session; return s.accumMs + (s.running? (Date.now()-s.startWall):0); }
+function derive(){
+  const ph=state.session.phases, es=elapsedMs()/1000, running=state.session.running;
+  const q=sensor.quality||0, sensorGood = q>=NORMS.ppg.minQual && !!sensor.hr;
+  let coh=null;
+  if(running && sensorGood){
+    const expAt=(t)=>phaseAt(ph,t).exp;
+    const c=coherence(sensor.ibis, expAt, state.session.startWall, state.session.accumMs, NORMS.coh);
+    coh = c? c.coh : null;
+  }
+  return {
+    proto: NORMS.protocols[state.protocol],
+    phase: phaseAt(ph, es),
+    breaths: breathCount(ph, es),
+    pace: paceBpm(ph),
+    adh: adherence(state.session.taps, cycleSeconds(ph)),
+    charge: chargeFrom(state.history, state.now),
+    streak: streakDays(state.history, state.now),
+    week: weekBuckets(state.history, state.now),
+    weekMin: weekBuckets(state.history, state.now).reduce((a,b)=>a+b.min,0),
+    sig: { mode:sensor.mode, streaming:sensor.streaming, hr:sensor.hr, quality:q, good:sensorGood, coh },
+  };
+}
+
+/* ═══════════════ RENDER · состояние → DOM. Каждый блок fail-soft. ═══════════════ */
+const $=id=>document.getElementById(id);
+function guard(name, fn){ try{ fn(); }catch(e){ console.warn('render '+name+' failed', e); } }
+
+const cv=$('torus'); const ctx=cv.getContext('2d');
+function sizeCanvas(el){ const r=el.getBoundingClientRect(), dpr=Math.min(window.devicePixelRatio||1,2);
+  el.width=Math.max(1,Math.round(r.width*dpr)); el.height=Math.max(1,Math.round(r.height*dpr));
+  el.getContext('2d').setTransform(dpr,0,0,dpr,0,0); }
+function drawTorus(exp, glow, coh){
+  guard('torus', ()=>{
+    const r=cv.getBoundingClientRect(), w=r.width, h=r.height; if(w<2) return;
+    ctx.clearRect(0,0,w,h);
+    const cx=w/2, cy=h/2, baseR=Math.min(w,h)*0.30;
+    for(let k=3;k>=0;k--){ const rr=baseR*(1+0.06*k);
+      ctx.beginPath(); ctx.ellipse(cx,cy,rr,rr*0.62,0,0,Math.PI*2);
+      ctx.strokeStyle='rgba(200,169,110,'+(0.05+0.05*k)+')'; ctx.lineWidth=1; ctx.stroke(); }
+    const gr=baseR*(0.5+0.85*exp);
+    ctx.beginPath(); ctx.ellipse(cx,cy,gr,gr*0.62,0,0,Math.PI*2);
+    ctx.strokeStyle='rgba(232,200,122,'+(0.18+0.22*exp)+')'; ctx.lineWidth=1.4; ctx.stroke();
+    if(coh!=null){ const cr=baseR*1.16;                       // кольцо созвучия — петля видна
+      ctx.beginPath(); ctx.ellipse(cx,cy,cr,cr*0.62,0,0,Math.PI*2);
+      ctx.strokeStyle='rgba(93,184,154,'+(0.1+0.45*coh)+')'; ctx.lineWidth=1+2.4*coh; ctx.stroke(); }
+    const fr=baseR*(0.32+0.7*exp), a=clamp(glow,0,1);
+    const g=ctx.createRadialGradient(cx,cy,0,cx,cy,fr);
+    g.addColorStop(0,'rgba(255,242,214,'+(0.95*a)+')');
+    g.addColorStop(0.35,'rgba(232,200,122,'+(0.8*a)+')');
+    g.addColorStop(0.7,'rgba(224,130,74,'+(0.45*a)+')');
+    g.addColorStop(1,'rgba(224,130,74,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(cx,cy,fr,fr*0.9,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx,cy,baseR*0.06,0,Math.PI*2); ctx.fillStyle='rgba(255,242,214,'+(0.5+0.4*exp)+')'; ctx.fill();
+  });
+}
+
+function renderStage(d){
+  guard('stage', ()=>{
+    $('stageProto').textContent = d.proto? d.proto.name : '—';
+    $('phaseWord').textContent = state.session.running ? (d.phase.label||'') : (elapsedMs()>0?'Пауза':'Готово');
+    $('phaseCount').textContent = state.session.running && d.phase.cyc>0 ? (d.phase.tLeft+' с') : '';
+    const ms=elapsedMs(), s=Math.floor(ms/1000);
+    $('roTime').textContent = Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+    $('roBreaths').textContent = d.breaths;
+    $('roPace').textContent = d.pace>0 ? d.pace.toFixed(1)+' /мин' : '—';
+    const adhWrap=$('roAdhWrap');
+    if(d.adh!=null){ adhWrap.hidden=false; $('roAdh').textContent=Math.round(d.adh*100)+'%'; } else adhWrap.hidden=true;
+    $('startBtn').textContent = state.session.running ? 'Пауза' : (elapsedMs()>0?'Продолжить':'Начать');
+    $('stopBtn').hidden = elapsedMs()<=0;
+    $('tapBtn').hidden = !state.session.running;
+    if(state.session.running){
+      const coh=d.sig.coh;
+      let glow = 0.5 + 0.4*d.phase.exp;
+      if(coh!=null) glow = 0.45 + 0.35*d.phase.exp + 0.2*coh;   // созвучие подпитывает ровность огня (петля)
+      drawTorus(d.phase.exp, glow, coh);
+    } else { const emb=0.18+0.4*d.charge; drawTorus(0.12+0.25*d.charge, emb, null); }
+  });
+}
+
+function renderChips(){
+  guard('chips', ()=>{
+    const wrap=$('chips'); wrap.textContent='';
+    const list = state.mode==='simple' ? NORMS.simpleOrder : NORMS.order;
+    list.forEach(key=>{
+      const p=NORMS.protocols[key];
+      const b=document.createElement('button'); b.className='chip'; b.type='button';
+      b.setAttribute('aria-pressed', String(key===state.protocol));
+      const t=document.createElement('span'); t.textContent=p.name; b.appendChild(t);
+      const sm=document.createElement('small'); sm.textContent=p.tag; b.appendChild(sm);
+      b.addEventListener('click',()=>selectProtocol(key));
+      wrap.appendChild(b);
+    });
+    $('cadenceField').hidden = !(NORMS.protocols[state.protocol] && NORMS.protocols[state.protocol].cadence);
+  });
+}
+function renderProtoMeta(){
+  guard('protometa', ()=>{
+    const p=NORMS.protocols[state.protocol]; if(!p) return;
+    const el=$('protoMeta'); el.textContent='';
+    const b=document.createElement('b'); b.textContent=p.name+'. '; el.appendChild(b);
+    el.appendChild(document.createTextNode(p.note+' '));
+    const src=document.createElement('span'); src.style.color='var(--faint)';
+    src.style.fontFamily="var(--f-sans)"; src.style.fontSize='10px';
+    src.textContent='['+p.src+']'; el.appendChild(src);
+    $('cadenceV').textContent=state.cadence.toFixed(1)+' / мин';
+    $('stageHint').textContent = p.vigorous
+      ? 'Огненное дыхание — короткими подходами. Не при беременности, гипертонии, болезнях сердца, глаукоме, эпилепсии; при головокружении — стоп.'
+      : 'Огонь и кольцо — иллюстрация, а не датчик. Измеряется то, что вы делаете: темп, время, число вдохов. Пробел — старт/пауза.';
+  });
+}
+function renderCharge(d){
+  guard('charge', ()=>{ $('chargeBar').style.width=Math.round(d.charge*100)+'%';
+    $('chargePct').textContent=Math.round(d.charge*100)+'%'; });
+}
+function renderWeek(d){
+  guard('week', ()=>{
+    const wb=$('weekBars'); wb.textContent='';
+    const max=Math.max(20, ...d.week.map(x=>x.min));
+    d.week.forEach(x=>{ const col=document.createElement('div'); col.className='d';
+      const bar=document.createElement('div'); bar.className='bar';
+      const fill=document.createElement('i'); fill.style.height=Math.round((x.min/max)*100)+'%'; bar.appendChild(fill);
+      const lab=document.createElement('div'); lab.className='dl'; lab.textContent=x.label;
+      col.appendChild(bar); col.appendChild(lab); wb.appendChild(col); });
+    $('statStreak').textContent=d.streak;
+    $('statMin').textContent=Math.round(d.weekMin);
+    $('statSess').textContent=state.history.length;
+    const log=$('log'); log.textContent='';
+    if(!state.history.length){ const li=document.createElement('li'); li.className='empty';
+      li.textContent='Пока пусто. Одна сессия — уже начало серии.'; log.appendChild(li); }
+    else {
+      [...state.history].reverse().slice(0,12).forEach(s=>{
+        const li=document.createElement('li'); const t=document.createElement('span');
+        const dt=new Date(s.date); const nm=(NORMS.protocols[s.protocol]||{}).name||s.protocol;
+        const cohTxt = s.coherence!=null? ' · созв '+Math.round(s.coherence*100)+'%' : '';
+        t.textContent=`${dt.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})} · ${nm} · ${Math.round(s.durationMs/60000)}м · ${s.breaths} вд.${cohTxt}`;
+        const x=document.createElement('button'); x.className='x'; x.title='удалить'; x.textContent='✕';
+        x.addEventListener('click',()=>deleteSession(s.id));
+        li.appendChild(t); li.appendChild(x); log.appendChild(li);
+      });
+    }
+    $('undoWrap').hidden = !state.lastDeleted;
+  });
+}
+
+// — Биообратная связь · живой рендер петли —
+function renderBio(d){
+  guard('bio', ()=>{
+    const mode=sensor.mode, streaming=sensor.streaming, running=state.session.running;
+    const tapOn = mode==='tap' && streaming;
+    $('pulseRow').hidden = !tapOn;
+    $('pulseHintField').hidden = !tapOn;
+    $('camRow').hidden = mode!=='camera';
+    $('loopDiag').hidden = mode==='none';
+    $('bioLive').hidden = mode==='none';
+    $('cohWrap').hidden = mode==='none';
+    const good=d.sig.good, hr=d.sig.hr, q=d.sig.quality, coh=d.sig.coh;
+    $('bioHr').textContent = (good && hr)? Math.round(hr)+' уд/мин' : '—';
+    $('bioHrv').textContent = (good && sensor.ibis.length>=4)? Math.round(rmssd(sensor.ibis))+' мс' : '—';
+    $('qualBar').style.width = Math.round(q*100)+'%';
+    $('bioCoh').textContent = coh!=null? Math.round(coh*100)+'%' : (running? 'слушаю…' : '—');
+    $('cohBar').style.width = coh!=null? Math.round(coh*100)+'%' : '0%';
+    // подсветка стадий петли
+    let reached = { breath:false, signal:false, coh:false, adjust:false };
+    if(running){ reached.breath=true; if(good){ reached.signal=true; if(coh!=null){ reached.coh=true; reached.adjust=true; } } }
+    else if(good){ reached.signal=true; }
+    document.querySelectorAll('#loopDiag .st').forEach(el=>el.classList.toggle('on', !!reached[el.dataset.st]));
+    // честные сообщения
+    const msg=$('bioMsg');
+    if(mode==='none') msg.textContent='Датчик не подключён — созвучие не измеряется, и мы не показываем выдуманных чисел. Лучший источник — браслет/нагрудный датчик по Bluetooth; есть также отсчёт касанием и камера.';
+    else if((mode==='camera'||mode==='ble') && !streaming) msg.textContent=sensor.lastError||'Источник недоступен. Попробуйте «Отсчёт пульса» или переподключите датчик.';
+    else if(!running) msg.textContent='Петля замыкается во время дыхания: начните сессию, и созвучие сердца с дыханием станет считаться. Сейчас идёт только пульс.';
+    else if(!good) msg.textContent = mode==='camera' ? 'Сигнал слабый: прижмите палец к камере/вспышке, добавьте света, держите ровно.'
+      : mode==='ble' ? 'Жду данные с браслета — проверьте посадку на запястье и режим передачи пульса.'
+      : 'Собираю удары — отмечайте кнопкой каждый толчок пульса на запястье или шее.';
+    else if(coh==null) msg.textContent='Считаю созвучие — дышите ровно ещё несколько циклов.';
+    else msg.textContent = mode==='tap' ? 'Отсчёт касанием даёт грубую оценку — цифры ориентировочные.'
+      : mode==='ble' ? 'Браслет отдаёт межударные интервалы — самое точное созвучие из доступных источников. Оценка, не клиника.'
+      : 'Созвучие оценивается по дыхательной аритмии: пульс выше на вдохе, ниже на выдохе. Оценка, не клиника.';
+  });
+}
+
+function renderCheckin(){
+  guard('checkin', ()=>{
+    $('checkinBody').hidden = !state.checkin.on;
+    $('checkinOff').hidden = state.checkin.on;
+    const el=$('checkinDelta');
+    if(state.checkin.pre && state.checkin.post){
+      const dd=k=>state.checkin.post[k]-state.checkin.pre[k]; const f=v=>(v>0?'+':'')+v;
+      el.textContent=`Сдвиг: покой ${f(dd('calm'))} · опора ${f(dd('steady'))} · тонус ${f(dd('warm'))}`;
+    } else el.textContent='';
+  });
+}
+
+// — Прогресс: рисуем только при изменениях (dirty-guard) —
+function drawSpark(canvas, series, min, max, color){
+  if(!canvas) return; sizeCanvas(canvas);
+  const g=canvas.getContext('2d'); const r=canvas.getBoundingClientRect(), w=r.width, h=r.height;
+  g.clearRect(0,0,w,h);
+  const pts=[]; series.forEach((v,i)=>{ if(v!=null) pts.push({i,v}); });
+  // базовая линия
+  g.strokeStyle='rgba(120,160,220,0.14)'; g.lineWidth=1; g.beginPath(); g.moveTo(0,h-8); g.lineTo(w,h-8); g.stroke();
+  if(pts.length===0){ g.fillStyle='rgba(139,133,119,0.8)'; g.font="11px Georgia,serif"; g.fillText('нет данных', 6, h/2); return; }
+  const n=series.length; const X=i=> n>1? 4 + (w-8)*(i/(n-1)) : w/2;
+  const Y=v=> (h-10) - (h-16)*clamp((v-min)/(max-min||1),0,1);
+  // нулевая линия для дельты
+  if(min<0){ const y0=Y(0); g.strokeStyle='rgba(120,160,220,0.25)'; g.setLineDash([3,3]); g.beginPath(); g.moveTo(0,y0); g.lineTo(w,y0); g.stroke(); g.setLineDash([]); }
+  g.strokeStyle=color; g.lineWidth=1.6; g.beginPath();
+  pts.forEach((p,k)=>{ const x=X(p.i), y=Y(p.v); if(k===0) g.moveTo(x,y); else g.lineTo(x,y); });
+  g.stroke();
+  g.fillStyle=color; pts.forEach(p=>{ g.beginPath(); g.arc(X(p.i),Y(p.v),2.1,0,Math.PI*2); g.fill(); });
+}
+let progSig='';
+function renderProgress(force){
+  guard('progress', ()=>{
+    if(state.mode!=='full') return;
+    const h=state.history;
+    const sig=(force?'F':'')+h.length+':'+(h.length?h[h.length-1].id:'')+':'+state.mode;
+    if(sig===progSig && !force) return; progSig=sig;
+    const P=progressData(h);
+    drawSpark($('progAdh'), P.adh.map(v=>v==null?null:v*100), 0, 100, '#5db89a');
+    drawSpark($('progCalm'), P.calm, -4, 4, '#b79be8');
+    drawSpark($('progCoh'), P.coh.map(v=>v==null?null:v*100), 0, 100, '#6a8fd4');
+    const arrow=t=> t>0?'↗':t<0?'↘':'→';
+    const sum=$('progSummary');
+    if(!P.n){ sum.textContent='Данных пока нет. Проведите несколько сессий — «в такт» и отметки состояния соберутся сами, а с датчиком добавится созвучие.'; $('progReson').textContent=''; return; }
+    sum.textContent='';
+    const parts=[];
+    parts.push(['Сессий: ', String(P.n)+'. ']);
+    if(P.adhMed!=null) parts.push(['Медиана «в такт»: ', Math.round(P.adhMed*100)+'% ('+arrow(P.adhTrend)+'). ']);
+    if(P.calmMean!=null) parts.push(['Средний сдвиг покоя: ', (P.calmMean>0?'+':'')+P.calmMean.toFixed(1)+' (сам-отчёт). ']);
+    if(P.cohMed!=null) parts.push(['Медиана созвучия: ', Math.round(P.cohMed*100)+'% ('+arrow(P.cohTrend)+', оценка). ']);
+    parts.forEach(pr=>{ sum.appendChild(document.createTextNode(pr[0])); const b=document.createElement('b'); b.textContent=pr[1]; sum.appendChild(b); });
+    $('progReson').textContent = P.reson
+      ? 'Личный резонанс ≈ '+P.reson+'/мин — на нём созвучие держалось выше всего (оценка).'
+      : 'Личный резонанс уточнится, когда попробуете разные темпы когерентного дыхания с датчиком.';
+  });
+}
+
+function render(){ const d=derive();
+  renderStage(d); renderBio(d);
+  renderCharge(d); renderWeek(d); renderCheckin(); renderProgress(false);
+  if(state.session.running && d.sig.coh!=null){ state.session.cohSamples.push(d.sig.coh);
+    if(state.session.cohSamples.length>3000) state.session.cohSamples.shift(); }
+}
+
+/* ═══════════════ ENGINE · часы дыхания + петля датчика ═══════════════ */
+let raf=null, tick=null;
+function loop(){ render(); raf=requestAnimationFrame(loop); }
+function syncLoop(){
+  const active = state.session.running || sensor.streaming;
+  if(active){ if(reduced){ if(!tick) tick=setInterval(render,200); } else { if(!raf) loop(); } }
+  else { if(raf){ cancelAnimationFrame(raf); raf=null; } if(tick){ clearInterval(tick); tick=null; } render(); }
+}
+function toggleRun(){
+  const s=state.session;
+  if(s.running){ s.accumMs+=Date.now()-s.startWall; s.running=false; }
+  else { if(state.checkin.on && !state.checkin.pre) capturePre();
+    s.startWall=Date.now(); s.running=true; s.cohSamples=[]; }
+  syncLoop(); render();
+}
+function stopSession(){
+  const s=state.session, ms=elapsedMs(); s.running=false;
+  if(ms>3000){
+    if(state.checkin.on) capturePost();
+    const d=derive();
+    const cohMed = s.cohSamples.length? median(s.cohSamples) : null;
+    const rec={ id:Date.now()+'-'+Math.random().toString(36).slice(2,6), date:new Date().toISOString(),
+      protocol:state.protocol, durationMs:clamp(ms,0,NORMS.sessionCapMin*60000),
+      breaths:d.breaths, adherence:d.adh, coherence:cohMed, cadence:state.cadence,
+      calmDelta: (state.checkin.pre&&state.checkin.post)? (state.checkin.post.calm-state.checkin.pre.calm) : null,
+      checkin: (state.checkin.pre||state.checkin.post)? {pre:state.checkin.pre,post:state.checkin.post}:null };
+    state.history.push(rec); persist();
+    // мост в общий журнал «Своей ноты»: сессия — практика части «тело» (дуга «чувства и тело»)
+    try{ const parentOrigin=document.referrer?new URL(document.referrer).origin:location.origin; parent.postMessage({type:'nota-solar-session', session:{
+      id:rec.id, date:rec.date, protocol:rec.protocol, durationMs:rec.durationMs,
+      breaths:rec.breaths, adherence:rec.adherence, coherence:rec.coherence, calmDelta:rec.calmDelta }},parentOrigin); }catch(e){}
+  }
+  s.accumMs=0; s.taps=[]; s.cohSamples=[]; s.startWall=0;
+  state.checkin.pre=null; state.checkin.post=null; syncCheckinInputs();
+  syncLoop(); renderProgress(true);
+}
+function persist(){ store.set('t_history', state.history); }
+
+/* ═══════════════ actions ═══════════════ */
+function setMode(m){ state.mode=m;
+  $('modeSimple').setAttribute('aria-pressed',String(m==='simple'));
+  $('modeFull').setAttribute('aria-pressed',String(m==='full'));
+  document.querySelectorAll('.full-only').forEach(el=>el.hidden = (m!=='full'));
+  if(m==='simple' && !NORMS.simpleOrder.includes(state.protocol)) selectProtocol('coherent');
+  renderChips(); renderProtoMeta(); renderProgress(true);
+}
+function selectProtocol(key){
+  if(state.session.running || elapsedMs()>0){ state.session.running=false; state.session.accumMs=0; state.session.startWall=0; state.session.taps=[]; state.session.cohSamples=[]; }
+  state.protocol=key; state.session.phases=phasesFor(key, state.cadence);
+  renderChips(); renderProtoMeta(); syncLoop();
+}
+function setCadence(v){ state.cadence=clamp(parseFloat(v),4.5,6.5);
+  if(NORMS.protocols[state.protocol].cadence) state.session.phases=phasesFor(state.protocol,state.cadence);
+  renderProtoMeta(); render();
+}
+function tap(){ if(state.session.running) state.session.taps.push(Date.now()); render(); }
+
+function readCheckin(){ const o={}; document.querySelectorAll('[data-ci]').forEach(i=>o[i.dataset.ci]=clamp(parseInt(i.value,10),1,5)); return o; }
+function syncCheckinInputs(){ document.querySelectorAll('[data-ci]').forEach(i=>i.value='3'); }
+function capturePre(){ state.checkin.pre=readCheckin(); }
+function capturePost(){ state.checkin.post=readCheckin(); }
+
+async function setSensor(mode){
+  if(mode==='none'){ sensor.stop(); state.bio.mode='none'; store.set('t_bio','none'); syncLoop(); renderBio(derive()); return; }
+  const res=await sensor.start(mode);
+  if(!res.ok){
+    sensor.lastError = res.reason==='no-api' ? 'Камера не поддерживается этим браузером.'
+      : res.reason==='no-ble' ? 'Web Bluetooth не поддерживается этим браузером — попробуйте Chrome/Opera/Edge.'
+      : res.reason==='NotAllowedError' ? (mode==='ble'?'Доступ к Bluetooth не разрешён.':'Доступ к камере не разрешён.')
+      : res.reason==='NotFoundError' ? (mode==='ble'?'Браслет не выбран или не найден — включите на нём трансляцию пульса.':'Камера не найдена.')
+      : mode==='ble' ? 'Не удалось подключить браслет. Включите Bluetooth и режим передачи пульса (Broadcast/Share HR).'
+      : 'Камера недоступна в этом окне (частая блокировка в песочнице).';
+    state.bio.mode='none'; $('bioSrc').value='none';
+  } else { sensor.lastError=''; state.bio.mode=sensor.mode; store.set('t_bio',mode); }
+  syncLoop(); renderBio(derive());
+}
+
+// Автоподключение к последнему источнику: браслет — тихо через getDevices(),
+// камера — только если разрешение уже дано (без внезапных диалогов), касание — сразу.
+async function autoConnect(){
+  const saved=store.get('t_bio');
+  if(!saved||saved==='none') return;
+  try{
+    if(saved==='tap'){ await sensor.start('tap'); state.bio.mode='tap'; }
+    else if(saved==='ble'){ const r=await sensor.startBleKnown(); if(r.ok){ sensor.lastError=''; state.bio.mode='ble'; } else return; }
+    else if(saved==='camera'){
+      let granted=false;
+      try{ const st=await navigator.permissions.query({name:'camera'}); granted=st.state==='granted'; }catch(e){}
+      if(!granted) return;
+      const r=await sensor.start('camera'); if(r.ok) state.bio.mode='camera'; else return;
+    } else return;
+    $('bioSrc').value=state.bio.mode; syncLoop(); renderBio(derive());
+  }catch(e){ /* автоподключение — всегда тихое */ }
+}
+
+function deleteSession(id){
+  const i=state.history.findIndex(s=>s.id===id); if(i<0) return;
+  state.lastDeleted={ rec:state.history[i], idx:i };
+  state.history.splice(i,1); persist(); render(); renderProgress(true);
+}
+function undoDelete(){ if(!state.lastDeleted) return;
+  const {rec,idx}=state.lastDeleted; state.history.splice(Math.min(idx,state.history.length),0,rec);
+  state.lastDeleted=null; persist(); render(); renderProgress(true);
+}
+
+/* ═══════════════ WIRING ═══════════════ */
+function wire(){
+  $('modeSimple').addEventListener('click',()=>setMode('simple'));
+  $('modeFull').addEventListener('click',()=>setMode('full'));
+  $('startBtn').addEventListener('click',toggleRun);
+  $('stopBtn').addEventListener('click',stopSession);
+  $('tapBtn').addEventListener('click',tap);
+  $('cadence').addEventListener('input',e=>setCadence(e.target.value));
+  $('checkinOn').addEventListener('change',e=>{ state.checkin.on=e.target.checked; if(!e.target.checked){state.checkin.pre=null;state.checkin.post=null;} renderCheckin(); });
+  document.querySelectorAll('[data-ci]').forEach(i=>i.addEventListener('input',()=>{ if(!state.session.running && elapsedMs()===0) capturePre(); renderCheckin(); }));
+  $('bioSrc').addEventListener('change',e=>setSensor(e.target.value));
+  $('pulseBtn').addEventListener('click',()=>{ sensor.tap(); render(); });
+  $('undoBtn').addEventListener('click',undoDelete);
+  // профиль живёт во вкладке «Динамика» родительского приложения
+  $('profileBtn').addEventListener('click',()=>{ try{ const parentOrigin=document.referrer?new URL(document.referrer).origin:location.origin; parent.postMessage({type:'nota-open-profile'},parentOrigin); }catch(e){} });
+  $('themeBtn').addEventListener('click',()=>{
+    const root=document.documentElement, dark=root.getAttribute('data-theme')==='dark';
+    if(dark) root.removeAttribute('data-theme'); else root.setAttribute('data-theme','dark');
+    store.set('t_theme', dark?'light':'dark'); render(); renderProgress(true);
+  });
+  const scrim=$('methodScrim'), bioScrim=$('bioHelpScrim');
+  const openScrim=el=>{ el.hidden=false; }, closeScrim=el=>{ el.hidden=true; };
+  $('openMethod').addEventListener('click',()=>openScrim(scrim));
+  $('closeMethod').addEventListener('click',()=>closeScrim(scrim));
+  scrim.addEventListener('click',e=>{ if(e.target===scrim) closeScrim(scrim); });
+  const openBioHelp=()=>openScrim(bioScrim);
+  $('bioHelp').addEventListener('click',openBioHelp);
+  $('closeBioHelp').addEventListener('click',()=>closeScrim(bioScrim));
+  bioScrim.addEventListener('click',e=>{ if(e.target===bioScrim) closeScrim(bioScrim); });
+  const bm=$('bioMsg');
+  bm.addEventListener('click',openBioHelp);
+  bm.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.code==='Space'){ e.preventDefault(); openBioHelp(); } });
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){ if(!scrim.hidden) closeScrim(scrim); if(!bioScrim.hidden) closeScrim(bioScrim); }
+    const modalOpen = !scrim.hidden || !bioScrim.hidden;
+    if(e.code==='Space' && !modalOpen && e.target!==bm && ['INPUT','SELECT','BUTTON','TEXTAREA'].indexOf(e.target.tagName)<0){ e.preventDefault(); toggleRun(); }
+  });
+  window.addEventListener('resize',()=>{ sizeCanvas(cv); render(); renderProgress(true); });
+  window.addEventListener('pagehide',()=>{ sensor.stop(); });
+  document.addEventListener('visibilitychange',()=>{ if(document.hidden && sensor.mode==='camera') { sensor.stop(); $('bioSrc').value='none'; state.bio.mode='none'; syncLoop(); renderBio(derive()); } });
+}
+
+/* ═══════════════ INIT ═══════════════ */
+function init(){
+  try{
+    if(store.get('t_theme')==='dark') document.documentElement.setAttribute('data-theme','dark');
+    sizeCanvas(cv); wire();
+    setMode('full'); renderChips(); renderProtoMeta(); renderBio(derive()); renderCheckin();
+    render();
+    autoConnect();
+  }catch(e){ console.error('init failed', e); }
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+</script>
+</body>
+</html>
