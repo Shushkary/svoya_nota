@@ -6,7 +6,7 @@
  * в сеть и никогда не попадают в Cache Storage.
  */
 const CACHE_PREFIX = 'svoya-nota-';
-const CACHE_VERSION = '2026-08-02.24';
+const CACHE_VERSION = '2026-08-02.25';
 const SHELL_CACHE = `${CACHE_PREFIX}shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `${CACHE_PREFIX}static-${CACHE_VERSION}`;
 const ACTIVE_CACHES = new Set([SHELL_CACHE, STATIC_CACHE]);

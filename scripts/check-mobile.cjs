@@ -46,7 +46,7 @@ let browser;
       })
     : 0;
   await page.screenshot({ path: 'C:/tmp/nota-mobile-nutrition.png', fullPage: true });
-  await page.getByRole('button', { name: /Заполнить вручную/ }).click();
+  await page.getByRole('button', { name: /Вручную/ }).click();
   await page.getByRole('searchbox', { name: 'Продукт', exact: true }).fill('яблоко');
   await page.locator('.food-results button').first().click();
   await page.getByLabel('Порция, г').fill('150');
@@ -56,7 +56,7 @@ let browser;
     && Number(await page.getByLabel('Ккал').inputValue()) > 0
     && Number(await page.getByLabel('Калий, мг').inputValue()) > 0;
   await page.getByRole('button', { name: '← Закрыть' }).click();
-  await page.getByRole('button', { name: /Заполнить вручную/ }).click();
+  await page.getByRole('button', { name: /Вручную/ }).click();
   await page.getByLabel('Состав блюда').fill('Гречка с курицей, 300 г');
   await page.getByLabel('Ккал').fill('420');
   await page.getByLabel('Белки, г').fill('32');
