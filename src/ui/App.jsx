@@ -188,10 +188,10 @@ export default function App() {
     setJournal((prev) => upsertEntry(prev, kind, payload, at, clientId).journal);
   }, []);
 
-  const updateEntry = useCallback((kind, clientId, payload) => {
+  const updateEntry = useCallback((kind, clientId, payload, at) => {
     setJournal((prev) => {
       const existing = prev.entries[kind]?.[clientId];
-      return upsertEntry(prev, kind, payload, existing?.at, clientId).journal;
+      return upsertEntry(prev, kind, payload, at || existing?.at, clientId).journal;
     });
   }, []);
 

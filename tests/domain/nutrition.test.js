@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   aggregateMeals,
+  clampMealTimestamp,
   combinedDigestiveLoad,
   digestionActivityAt,
   digestionFinishesBy,
@@ -48,15 +49,23 @@ test('нагрузка плавно затухает и не остаётся п
   assert.equal(digestionActivityAt(meal, new Date(2026, 6, 22, 15, 1, 0)), 0);
 });
 
-test('внесённый приём с будущим временем сразу отображается на тороиде', () => {
+test('будущий приём не отображается на тороиде и не создаёт нагрузку', () => {
   const now = new Date(2026, 7, 2, 12, 43, 0);
   const meal = {
     kcal: 250, p: 12, f: 20, c: 2, fiber: 0,
     eatenAt: new Date(2026, 7, 2, 17, 18, 0).getTime(),
     digestionH: 3,
   };
-  assert.equal(digestionActivityAt(meal, now), 1);
-  assert.ok(combinedDigestiveLoad([meal], now) > 0);
+  assert.equal(digestionActivityAt(meal, now), 0);
+  assert.equal(combinedDigestiveLoad([meal], now), 0);
+});
+
+test('время фактического приёма ограничивается текущим', () => {
+  const now = new Date(2026, 7, 2, 12, 43, 0);
+  const past = new Date(2026, 7, 2, 10, 15, 0);
+  const future = new Date(2026, 7, 2, 17, 18, 0);
+  assert.equal(clampMealTimestamp(past, now), past.getTime());
+  assert.equal(clampMealTimestamp(future, now), now.getTime());
 });
 
 test('жёлтая сетка определяется окончанием переваривания к 18:00', () => {

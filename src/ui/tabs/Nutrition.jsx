@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { errorText, api } from '../../infrastructure/api.js';
 import { prepareMealImage } from '../../infrastructure/image-processing.js';
-import { aggregateMeals, combinedDigestiveLoad, digestionActivityAt, digestionFinishesBy, estimateDigestionHours, effectiveDigestionHours, estimateProcessing, mealTimestamp, nutrientProgress, processingScore, scaleMealPayload } from '../../domain/nutrition/meal.js';
+import { aggregateMeals, clampMealTimestamp, combinedDigestiveLoad, digestionActivityAt, digestionFinishesBy, estimateDigestionHours, effectiveDigestionHours, estimateProcessing, mealTimestamp, nutrientProgress, processingScore, scaleMealPayload } from '../../domain/nutrition/meal.js';
 import { dailyActivityExpenditure, estimateActivityCalories, estimateStepCalories, findFreeActivityStart } from '../../domain/nutrition/activity.js';
 import { formatHour, mealType, normalizeHour } from '../../domain/nutrition/rhythm.js';
 import { parseGs1, isValidGtin } from '../../domain/barcode.js';
@@ -28,7 +28,9 @@ const localDay = (value) => {
 
 function atFromTime(time, now = new Date()) {
   const [hours = 12, minutes = 0] = String(time).split(':').map(Number);
-  return new Date(mealTimestamp(hours + minutes / 60, now));
+  const timestamp = new Date(now);
+  timestamp.setHours(hours, minutes, 0, 0);
+  return timestamp;
 }
 
 function formFromEstimate(result, fallbackName, source, mealMinute) {
@@ -221,7 +223,7 @@ function MealForm({ value, onChange, onSave, onClose, onRecalculate, onCatalogAd
       {value.estimateRange && <p className="estimate-review"><b>Предварительно: {value.estimateRange[0]}–{value.estimateRange[1]} ккал</b><span>Проверьте порцию, масло и соусы.{Number.isFinite(Number(value.trialRemaining)) ? ` Осталось пробных фото: ${value.trialRemaining}.` : ''}</span></p>}
       {field('name', 'Состав блюда', { type: 'text', maxLength: 250, placeholder: 'Например: яичница из 3 яиц на топлёном масле с зеленью' })}
       <div className="formrow">
-        {field('time', 'Время приёма', { type: 'time' })}
+        {field('time', 'Время приёма', { type: 'time', max: formatHour(currentMealMinute() / 60) })}
         {field('kcal', 'Ккал', { type: 'number', inputMode: 'numeric', min: 0, max: 10000 })}
       </div>
       <div className="formrow">
@@ -369,7 +371,10 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
 
   const save = () => {
     if (!form?.name.trim()) return;
-    const at = atFromTime(form.time);
+    const now = new Date();
+    const requestedAt = atFromTime(form.time, now);
+    const wasFuture = requestedAt.getTime() > now.getTime();
+    const at = new Date(clampMealTimestamp(requestedAt, now));
     const hour = at.getHours() + at.getMinutes() / 60;
     const draft = { name: form.name.trim(), kcal: number(form.kcal), p: number(form.proteinG, 1000), f: number(form.fatG, 1000), c: number(form.carbG, 1000), fiber: number(form.fiberG, 1000), sodium: number(form.sodiumMg, 20000), potassium: number(form.potassiumMg, 20000), magnesium: number(form.magnesiumMg, 5000) };
     const payload = {
@@ -384,9 +389,14 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
       userConfirmed: String(form.source || '').startsWith('ai_') || editing?.entry.payload?.userConfirmed || false,
       confirmedAt: String(form.source || '').startsWith('ai_') ? new Date().toISOString() : editing?.entry.payload?.confirmedAt || null,
     };
-    if (editing) updateEntry('meal', editing.entry.clientId, { ...editing.entry.payload, ...payload });
+    if (editing) updateEntry('meal', editing.entry.clientId, { ...editing.entry.payload, ...payload }, at.toISOString());
     else addEntry('meal', payload, at.toISOString());
-    setNotice(editing ? 'Приём обновлён.' : 'Приём добавлен в дневной ритм.');
+    // Пересчитываем тороид теми же часами, которыми ограничили время приёма.
+    // Иначе минутный UI-таймер может ещё считать только что сохранённую запись «будущей».
+    setClock(now.getTime());
+    setNotice(wasFuture
+      ? 'Будущее время заменено текущим: фактический приём не может быть записан заранее.'
+      : editing ? 'Приём обновлён.' : 'Приём добавлен в дневной ритм.');
     setForm(null);
     setEditing(null);
     setFormNotice('');
@@ -720,7 +730,7 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
                 <input ref={inputRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { analyzePhoto(event.target.files?.[0]); event.target.value = ''; }} />
                 <input ref={labelInputRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { analyzePhoto(event.target.files?.[0], 'label'); event.target.value = ''; }} />
                 {notice && <p className="n-notice" role="status">{notice}</p>}
-                <div className="n-meal-list">{meals.length === 0 ? <span className="n-empty">приёмов пока нет — добавьте выше</span> : meals.map((meal, index) => <div className={`n-meal-row${index === meals.length - 1 ? ' latest' : ''}`} key={meal.id}><span>{formatHour(meal.hour)} · {mealType(meal.hour)} · <b>{meal.name}</b> · {Math.round(meal.kcal)} ккал</span><span className="n-row-actions"><button title="Поправить" onClick={() => { setEditing(meal); setFormNotice(''); setForm({ name: meal.name, time: formatHour(meal.hour), kcal: meal.kcal, proteinG: meal.p, fatG: meal.f, carbG: meal.c, fiberG: meal.fiber, sodiumMg: meal.entry.payload.sodiumMg, potassiumMg: meal.entry.payload.potassiumMg, magnesiumMg: meal.entry.payload.magnesiumMg, source: meal.entry.payload.source, confidence: meal.confidence, originalEstimate: meal.entry.payload.originalEstimate, components: meal.entry.payload.components || [], nutritionProvenance: meal.entry.payload.nutritionProvenance || {} }); }}>Поправить</button><button title="Повторить с другой порцией" onClick={() => openRepeat(meal)}>↻</button><button title="Удалить" onClick={() => updateEntry('meal', meal.entry.clientId, { ...meal.entry.payload, deleted: true })}>×</button></span></div>)}</div>
+                <div className="n-meal-list">{meals.length === 0 ? <span className="n-empty">приёмов пока нет — добавьте выше</span> : meals.map((meal, index) => <div className={`n-meal-row${index === meals.length - 1 ? ' latest' : ''}`} key={meal.id}><span>{formatHour(meal.hour)} · {mealType(meal.hour)} · <b>{meal.name}</b> · {Math.round(meal.kcal)} ккал</span><span className="n-row-actions"><button title="Поправить" onClick={() => { setEditing(meal); setFormNotice(''); setForm({ name: meal.name, time: formatHour(Math.min(meal.hour, currentMealMinute() / 60)), kcal: meal.kcal, proteinG: meal.p, fatG: meal.f, carbG: meal.c, fiberG: meal.fiber, sodiumMg: meal.entry.payload.sodiumMg, potassiumMg: meal.entry.payload.potassiumMg, magnesiumMg: meal.entry.payload.magnesiumMg, source: meal.entry.payload.source, confidence: meal.confidence, originalEstimate: meal.entry.payload.originalEstimate, components: meal.entry.payload.components || [], nutritionProvenance: meal.entry.payload.nutritionProvenance || {} }); }}>Поправить</button><button title="Повторить с другой порцией" onClick={() => openRepeat(meal)}>↻</button><button title="Удалить" onClick={() => updateEntry('meal', meal.entry.clientId, { ...meal.entry.payload, deleted: true })}>×</button></span></div>)}</div>
 
                 <div className="n-rings">
                   <NutrientRing label="ккал" value={total.kcal} target={2200} color="#C8A96E" />

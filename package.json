@@ -12,6 +12,7 @@
     "check:csp": "node scripts/csp-hashes.cjs",
     "check:legal": "node scripts/check-legal.cjs",
     "check:mobile": "node scripts/check-mobile.cjs",
+    "check:toroid-meals": "node scripts/check-toroid-meals.cjs",
     "check:theme-profile": "node scripts/check-theme-profile.cjs"
   },
   "dependencies": {

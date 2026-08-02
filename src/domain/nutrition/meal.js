@@ -214,13 +214,17 @@ export function digestionActivityAt(meal, now = new Date(), digestionH = null) {
   const h = Number(digestionH) > 0 ? digestionH : normalized.digestionH;
   const elapsedMinutes = (now.getTime() - normalized.eatenAt) / 60_000;
   const durationMinutes = h * 60;
-  // Запись приёма — уже совершившийся факт, а не запланированное блюдо.
-  // Время может оказаться впереди часов устройства после ручного ввода,
-  // смены часового пояса или отката системных часов. Такой приём должен быть
-  // виден на тороиде сразу, а не пропадать до наступления указанного времени.
-  if (elapsedMinutes < 0) return 1;
-  if (elapsedMinutes > durationMinutes) return 0;
+  // Будущий приём не создаёт текущую пищеварительную нагрузку.
+  if (elapsedMinutes < 0 || elapsedMinutes > durationMinutes) return 0;
   return 1 - smoothstep(0.15, 1, elapsedMinutes / durationMinutes);
+}
+
+export function clampMealTimestamp(timestamp, now = new Date()) {
+  const nowMs = now instanceof Date ? now.getTime() : new Date(now).getTime();
+  const requestedMs = timestamp instanceof Date ? timestamp.getTime() : new Date(timestamp).getTime();
+  if (!Number.isFinite(nowMs)) return Number.isFinite(requestedMs) ? requestedMs : 0;
+  if (!Number.isFinite(requestedMs)) return nowMs;
+  return Math.min(requestedMs, nowMs);
 }
 
 export function combinedDigestiveLoad(meals, now = new Date(), activities = []) {
