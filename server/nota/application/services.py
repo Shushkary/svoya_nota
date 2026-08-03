@@ -53,7 +53,9 @@ def _today() -> str:
 class Limits:
     meal_text_per_day: int = 40
     meal_photo_per_day: int = 10
-    meal_photo_lifetime: int = 4
+    # None disables the commercial lifetime trial cap while keeping operational
+    # daily/concurrency safeguards in place.
+    meal_photo_lifetime: int | None = 4
     global_llm_per_day: int = 200
     registration_per_minute: int = 12
     registration_global_per_minute: int = 120
@@ -66,8 +68,8 @@ class Limits:
 @dataclass(frozen=True)
 class PhotoAnalysisResult:
     estimate: MealEstimate
-    trial_remaining: int
-    trial_limit: int
+    trial_remaining: int | None
+    trial_limit: int | None
     idempotent_replay: bool = False
 
 
@@ -383,7 +385,7 @@ class Services:
             if not acquired_gate:
                 raise RateLimitedError()
             # Attempt/global budgets protect provider cost. They are deliberately
-            # separate from the four successful lifetime trial uses.
+            # separate from the optional commercial lifetime limit.
             self._reserve(device_id, "meal_photo", self._limits.meal_photo_per_day)
             reserved_usage = True
             raw = self._gateway.complete_vision(
@@ -442,8 +444,8 @@ class Services:
         limit = self._limits.meal_photo_lifetime
         return {
             "photoLimit": limit,
-            "photoUsed": min(used, limit),
-            "photoRemaining": max(0, limit - used),
+            "photoUsed": min(used, limit) if limit is not None else used,
+            "photoRemaining": max(0, limit - used) if limit is not None else None,
         }
 
     def lookup_barcode(self, device_id: int, code: str) -> BarcodeProduct | None:

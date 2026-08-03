@@ -72,8 +72,8 @@ class EstimateOut(BaseModel):
     magnesiumMg: float = 0.0
     confidence: float
     comment: str
-    # Заполняются только для фото: это не часть оценки КБЖУ, а состояние
-    # пробного доступа, чтобы клиент честно показывал пользователю остаток.
+    # Заполняются только для фото при включённом лимите: это не часть оценки
+    # КБЖУ, а состояние пробного доступа для честного показа остатка клиентом.
     trialRemaining: int | None = Field(default=None, ge=0)
     trialLimit: int | None = Field(default=None, ge=1)
     idempotentReplay: bool = False

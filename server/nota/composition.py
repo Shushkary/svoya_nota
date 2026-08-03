@@ -23,6 +23,18 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _optional_limit_env(name: str, default: int | None) -> int | None:
+    """Zero disables a configurable commercial limit; invalid values fail safe."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return None if value == 0 else max(1, value)
+
+
 def create_app():
     validate_admin_configuration()
     db_path = os.environ.get("NOTA_DB_PATH", "./nota.db")
@@ -49,6 +61,7 @@ def create_app():
     limits = Limits(
         meal_text_per_day=_int_env("NOTA_MEAL_TEXT_DAILY", 40),
         meal_photo_per_day=_int_env("NOTA_MEAL_PHOTO_DAILY", 10),
+        meal_photo_lifetime=_optional_limit_env("NOTA_MEAL_PHOTO_LIFETIME", 4),
         global_llm_per_day=_int_env("NOTA_LLM_GLOBAL_DAILY", 200),
     )
     barcode_timeout = _int_env("NOTA_BARCODE_TIMEOUT", 5)

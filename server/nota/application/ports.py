@@ -64,7 +64,7 @@ class Repository(Protocol):
         now_epoch: int,
         processing_ttl_seconds: int,
         cache_ttl_seconds: int,
-        lifetime_limit: int,
+        lifetime_limit: int | None,
         per_device_concurrent: int,
         global_concurrent: int,
     ) -> PhotoAnalysisClaim:
@@ -78,9 +78,9 @@ class Repository(Protocol):
         request_hash: str,
         response_json: str,
         now_epoch: int,
-        lifetime_limit: int,
-    ) -> int:
-        """Commit one successful trial use and return remaining lifetime uses."""
+        lifetime_limit: int | None,
+    ) -> int | None:
+        """Commit one successful use and return remaining lifetime uses, if capped."""
         ...
 
     def fail_photo_analysis(

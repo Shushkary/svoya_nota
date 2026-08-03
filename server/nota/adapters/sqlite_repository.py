@@ -334,14 +334,14 @@ class SqliteRepository:
         now_epoch: int,
         processing_ttl_seconds: int,
         cache_ttl_seconds: int,
-        lifetime_limit: int,
+        lifetime_limit: int | None,
         per_device_concurrent: int,
         global_concurrent: int,
     ) -> PhotoAnalysisClaim:
-        """Reserve a trial slot and an idempotency key in one SQLite transaction.
+        """Reserve a photo-analysis slot and an idempotency key in one transaction.
 
-        Only a completed request is charged. Processing rows temporarily reserve a
-        slot so concurrent requests cannot overshoot the lifetime entitlement.
+        Only a completed request is counted. With a lifetime limit, processing rows
+        temporarily reserve a slot so concurrent requests cannot overshoot it.
         The database stores neither the image nor a network address.
         """
         conn = self._connect()
@@ -379,7 +379,10 @@ class SqliteRepository:
                         return PhotoAnalysisClaim(
                             "replay",
                             response_json=existing["response_json"],
-                            remaining=max(0, lifetime_limit - used),
+                            remaining=(
+                                max(0, lifetime_limit - used)
+                                if lifetime_limit is not None else None
+                            ),
                         )
                     if (
                         existing["status"] == "processing"
@@ -398,7 +401,9 @@ class SqliteRepository:
                         (device_id, stale_before),
                     ).fetchone()["count"]
                 )
-                if used >= lifetime_limit or used + active_for_device >= lifetime_limit:
+                if lifetime_limit is not None and (
+                    used >= lifetime_limit or used + active_for_device >= lifetime_limit
+                ):
                     conn.commit()
                     return PhotoAnalysisClaim("quota", remaining=0)
                 if active_for_device >= max(1, per_device_concurrent):
@@ -430,7 +435,11 @@ class SqliteRepository:
                 )
                 conn.commit()
                 return PhotoAnalysisClaim(
-                    "acquired", remaining=max(0, lifetime_limit - used)
+                    "acquired",
+                    remaining=(
+                        max(0, lifetime_limit - used)
+                        if lifetime_limit is not None else None
+                    ),
                 )
             except Exception:
                 conn.rollback()
@@ -443,8 +452,8 @@ class SqliteRepository:
         request_hash: str,
         response_json: str,
         now_epoch: int,
-        lifetime_limit: int,
-    ) -> int:
+        lifetime_limit: int | None,
+    ) -> int | None:
         conn = self._connect()
         with self._lock:
             conn.execute("BEGIN IMMEDIATE")
@@ -461,10 +470,13 @@ class SqliteRepository:
                 used = self._photo_trial_success_count_conn(conn, device_id)
                 if row["status"] == "completed":
                     conn.commit()
-                    return max(0, lifetime_limit - used)
+                    return (
+                        max(0, lifetime_limit - used)
+                        if lifetime_limit is not None else None
+                    )
                 if row["status"] != "processing":
                     raise RuntimeError("photo analysis claim is not active")
-                if used >= lifetime_limit:
+                if lifetime_limit is not None and used >= lifetime_limit:
                     conn.execute(
                         """
                         UPDATE photo_analysis_requests
@@ -493,7 +505,10 @@ class SqliteRepository:
                     (response_json, now_epoch, device_id, key_hash),
                 )
                 conn.commit()
-                return max(0, lifetime_limit - used - 1)
+                return (
+                    max(0, lifetime_limit - used - 1)
+                    if lifetime_limit is not None else None
+                )
             except Exception:
                 conn.rollback()
                 raise

@@ -262,6 +262,36 @@ def test_meal_photo_analyze(client_and_gateway):
     assert bad.status_code == 422
 
 
+def test_meal_and_label_photos_are_not_lifetime_capped_when_trial_is_disabled(tmp_path):
+    repo = SqliteRepository(str(tmp_path / "unlimited.db"))
+    gateway = FakeGateway(
+        '{"description":"Суп","kcal":250,"protein_g":12,"fat_g":8,"carb_g":30,'
+        '"confidence":0.7,"comment":"ок"}'
+    )
+    services = Services(
+        repo,
+        gateway,
+        Limits(meal_text_per_day=10, meal_photo_per_day=10, meal_photo_lifetime=None),
+    )
+    client = TestClient(build_app(services, "test", gateway.provider))
+    auth = _register(client)
+    _allow_ai(client, auth)
+
+    for index in range(6):
+        response = client.post(
+            "/api/meals/analyze",
+            json={"image": f"data:image/png;base64,{PNG_1PX}", "hint": "блюдо или этикетка"},
+            headers={**auth, "Idempotency-Key": f"unlimited-photo-{index:04d}"},
+        )
+        assert response.status_code == 200
+        assert response.json()["trialLimit"] is None
+        assert response.json()["trialRemaining"] is None
+
+    assert len([call for call in gateway.calls if call[0] == "vision"]) == 6
+    status = client.get("/api/meals/photo-trial", headers=auth).json()
+    assert status == {"photoLimit": None, "photoUsed": 6, "photoRemaining": None}
+
+
 def test_provider_failure_does_not_consume_text_quota(client_and_gateway):
     client, gateway, _ = client_and_gateway
     headers = _register(client)
