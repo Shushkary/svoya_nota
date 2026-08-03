@@ -2,10 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { errorText, api } from '../../infrastructure/api.js';
 import { prepareMealImage } from '../../infrastructure/image-processing.js';
 import { aggregateMeals, clampMealTimestamp, combinedDigestiveLoad, digestionActivityAt, digestionFinishesBy, estimateDigestionHours, effectiveDigestionHours, estimateProcessing, mealTimestamp, nutrientProgress, processingScore, scaleMealPayload } from '../../domain/nutrition/meal.js';
+import { computeNutritionTargets } from '../../domain/nutrition/targets.js';
 import { dailyActivityExpenditure, estimateActivityCalories, estimateStepCalories, findFreeActivityStart } from '../../domain/nutrition/activity.js';
 import { formatHour, mealType, normalizeHour } from '../../domain/nutrition/rhythm.js';
 import { parseGs1, isValidGtin } from '../../domain/barcode.js';
 import { latestWeightKg } from '../../infrastructure/weight.js';
+import { latestWaistCm } from '../../infrastructure/bodyStorage.js';
 import { loadPhoneSteps, savePhoneSteps } from '../../infrastructure/phoneSteps.js';
 import { canonicalStepsForDay, stepsActivity } from '../../domain/nutrition/steps.js';
 import { Card, Sheet } from '../components.jsx';
@@ -93,10 +95,10 @@ function Axis({ label, value, confidence = 'оценка' }) {
   return <div className="n-axis"><div className="n-axis-head"><span>{label}</span><b>{confidence}</b></div><div className="n-track"><i className="n-band" /><i className="n-marker" style={{ left: `${position}%` }} /></div></div>;
 }
 
-function NutrientRing({ label, value, target, color = '#4A7C7E', onClick }) {
+function NutrientRing({ label, value, target, unit = '', color = '#4A7C7E', onClick }) {
   const { ratio, percent } = nutrientProgress(value, target);
   const circumference = 2 * Math.PI * 17;
-  const inner = (<><svg viewBox="0 0 42 42" className="n-ring-svg" aria-hidden="true"><circle cx="21" cy="21" r="17" fill="none" stroke="var(--line)" strokeWidth="3" /><circle cx="21" cy="21" r="17" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" transform="rotate(-90 21 21)" strokeDasharray={`${ratio * circumference} ${circumference}`} /><text x="21" y="24" textAnchor="middle">{percent}%</text></svg><span>{label}</span><small>{Math.round(value)}/{target}</small></>);
+  const inner = (<><svg viewBox="0 0 42 42" className="n-ring-svg" aria-hidden="true"><circle cx="21" cy="21" r="17" fill="none" stroke="var(--line)" strokeWidth="3" /><circle cx="21" cy="21" r="17" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" transform="rotate(-90 21 21)" strokeDasharray={`${ratio * circumference} ${circumference}`} /><text x="21" y="24" textAnchor="middle">{percent}%</text></svg><span>{label}</span><small>{Math.round(value)}/{target}{unit ? ` ${unit}` : ''}</small></>);
   if (onClick) return <button type="button" className="n-ring-cell n-ring-btn" onClick={onClick}>{inner}</button>;
   return <div className="n-ring-cell">{inner}</div>;
 }
@@ -109,12 +111,67 @@ const ACTIVITY = {
 
 const MINERALS = [
   { key: 'sodium', label: 'натрий', unit: 'мг', color: '#B0685C',
-    src: 'Лимит ВОЗ: менее 2000 мг натрия в день (≈5 г соли). Кольцо — доля лимита.' },
+    src: 'Кольцо показывает долю верхнего ориентира, а не цель, которую обязательно нужно набрать.' },
   { key: 'potassium', label: 'калий', unit: 'мг', color: '#5D8A6E',
-    src: 'Рекомендация ВОЗ: не менее 3510 мг калия в день.' },
+    src: 'Суточный ориентир для взрослого задаётся по полу, а не линейно по массе тела.' },
   { key: 'magnesium', label: 'магний', unit: 'мг', color: '#8A6F4D',
-    src: 'RDA: мужчины ~400–420 мг, женщины ~310–320 мг в день (по возрасту).' },
+    src: 'Суточный ориентир для взрослого задаётся по полу и возрасту, а не линейно по массе тела.' },
 ];
+
+function TargetInfo({ info, targets, total }) {
+  const values = {
+    kcal: total.kcal, protein: total.p, fat: total.f, carb: total.c, fiber: total.fiber,
+    sodium: total.sodium, potassium: total.potassium, magnesium: total.magnesium,
+  };
+  const value = values[info.key] || 0;
+  const target = targets[info.key];
+  const basis = targets.basis;
+  const rateKey = {
+    kcal: 'kcalPerKg', protein: 'proteinGPerKg', fat: 'fatGPerKg', carb: 'carbGPerKg',
+    fiber: 'fiberGPerKg', sodium: 'sodiumMgPerKg', potassium: 'potassiumMgPerKg', magnesium: 'magnesiumMgPerKg',
+  }[info.key];
+  const rate = basis.rates[rateKey];
+  const referenceText = basis.method === 'rfm'
+    ? `Опорная масса ${basis.referenceKg} кг — расчётная безжировая масса: вес без оценённой жировой доли ${basis.bodyFatPercent}%. Оценка RFM использует рост, талию и пол.`
+    : basis.method === 'boer'
+      ? `Опорная масса ${basis.referenceKg} кг — запасная оценка безжировой массы по формулам Boer из веса, роста и пола. Добавьте талию, чтобы приложение использовало оценку RFM.`
+      : 'Вес не указан: показан общий справочный ориентир. Добавьте вес в «Самонаблюдении тела», а рост и пол — в профиле.';
+  const commonRate = rate != null
+    ? `${rate} ${info.key === 'kcal' ? 'ккал' : ['sodium', 'potassium', 'magnesium'].includes(info.key) ? 'мг' : 'г'}/кг расчётной массы.`
+    : null;
+
+  return <>
+    <p className="dim small">{value ? `${Math.round(value)} ${info.unit} за сегодня · ` : 'Нет данных за сегодня · '}{info.key === 'sodium' ? 'верхний ориентир' : 'расчётный ориентир'} {target} {info.unit}.</p>
+    {['kcal', 'protein', 'fat', 'carb', 'fiber'].includes(info.key) && <p className="dim small">{referenceText}</p>}
+    {commonRate && <p className="dim small">Эквивалент текущего расчёта: {commonRate}</p>}
+
+    {info.key === 'kcal' && <p className="dim small">Энергия оценивается по основному обмену: по безжировой массе, когда доступны талия и профиль; иначе по формуле Миффлина—Сан Жеора. Добавляется спокойный коэффициент повседневной активности и фактическая активность предыдущего дня. Это стартовый ориентир, а не цель снижения веса.</p>}
+    {info.key === 'protein' && <>
+      <p className="dim small">Формула приложения: 1,6 г × кг расчётной безжировой массы. Жировая доля не увеличивает цель. Безжировая масса включает не только мышцы, но также воду, кости и органы — приложение не выдаёт её за измеренную мышечную массу.</p>
+      <p className="dim small">Важно: метаанализ 1,6 г/кг относится к общей массе тела у здоровых взрослых с силовыми тренировками. Расчёт по безжировой массе — более консервативная адаптация приложения, а не дословная норма исследования.</p>
+    </>}
+    {info.key === 'fat' && <p className="dim small">В обычном режиме стартовый ориентир близок к 1 г/кг расчётной массы. В низкоуглеводном режиме жиры заполняют оставшуюся энергию после белка и выбранного уровня углеводов; значение ограничено диапазоном 0,8–2 г/кг.</p>}
+    {info.key === 'carb' && <p className="dim small">В обычном режиме стартовый ориентир — около 3 г/кг расчётной массы. При включённом низкоуглеводном переходе кольцо синхронизируется со шкалой: от 60 до 46 г/день за восемь недель.</p>}
+    {info.key === 'fiber' && <p className="dim small">Клетчатка считается из энергетического ориентира: 14 г на 1000 ккал, с практическим диапазоном 25–50 г/день. Повышать количество лучше постепенно и вместе с достаточным питьём.</p>}
+    {info.key === 'sodium' && <>
+      <p className="dim small">{basis.lowCarb ? 'Низкоуглеводный режим включён: кольцо использует 2300 мг как верхний ориентир, а не как обязательную цель. В начале ограничения углеводов возможна краткая потеря натрия, но клинический консенсус рекомендует добавлять соль только при симптомах гипотонии и отсутствии противопоказаний.' : 'Обычный режим: используется предел ВОЗ менее 2000 мг натрия в день (примерно 5 г соли). При включении низкоуглеводного перехода расчёт меняется, но не превращается в рекомендацию обязательно досаливать пищу.'}</p>
+      <p className="dim small">При гипертонии, болезнях почек или сердца, отёках, беременности либо приёме мочегонных ориентир должен определять врач.</p>
+    </>}
+    {info.key === 'potassium' && <p className="dim small">Ориентир National Academies для взрослых: 3400 мг/день для мужчин и 2600 мг/день для женщин. Это адекватное потребление, не точная индивидуальная потребность. При болезнях почек и лекарствах, влияющих на калий, нужна консультация врача.</p>}
+    {info.key === 'magnesium' && <p className="dim small">RDA для взрослых: 400–420 мг/день для мужчин и 310–320 мг/день для женщин в зависимости от возраста. Официальный ориентир не масштабируется линейно по килограммам; значение мг/кг выше показано только как эквивалент текущего расчёта.</p>}
+
+    <p className="eyebrow" style={{ marginTop: 14 }}>Методика и источники</p>
+    <div className="linkrow">
+      {['kcal', 'protein', 'fat', 'carb', 'fiber'].includes(info.key) && <><a href="https://pubmed.ncbi.nlm.nih.gov/30030479/" target="_blank" rel="noopener noreferrer">RFM: оценка доли жира по росту и талии</a><a href="https://pubmed.ncbi.nlm.nih.gov/6496691/" target="_blank" rel="noopener noreferrer">Boer: запасная оценка безжировой массы</a></>}
+      {info.key === 'kcal' && <><a href="https://pubmed.ncbi.nlm.nih.gov/7435418/" target="_blank" rel="noopener noreferrer">Cunningham: основной обмен и безжировая масса</a><a href="https://pubmed.ncbi.nlm.nih.gov/2305711/" target="_blank" rel="noopener noreferrer">Mifflin—St Jeor: запасная формула</a></>}
+      {info.key === 'protein' && <a href="https://bjsm.bmj.com/content/52/6/376" target="_blank" rel="noopener noreferrer">Метаанализ белка и силовых тренировок</a>}
+      {info.key === 'fiber' && <a href="https://nap.nationalacademies.org/catalog/10490/" target="_blank" rel="noopener noreferrer">National Academies: клетчатка</a>}
+      {info.key === 'sodium' && <><a href="https://www.who.int/publications/i/item/9789241504836" target="_blank" rel="noopener noreferrer">ВОЗ: натрий у взрослых</a><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8610544/" target="_blank" rel="noopener noreferrer">Международный консенсус по кетогенным диетам</a></>}
+      {info.key === 'potassium' && <a href="https://nap.nationalacademies.org/read/25353/chapter/8" target="_blank" rel="noopener noreferrer">National Academies: калий</a>}
+      {info.key === 'magnesium' && <a href="https://www.ncbi.nlm.nih.gov/books/NBK109816/" target="_blank" rel="noopener noreferrer">National Academies: магний</a>}
+    </div>
+  </>;
+}
 
 // Справочные рекомендации по активности и питанию (раздел «Активности»).
 // Текст прошёл проверку на соответствие §2.1/§3.2 спец. «Вариант D» и РФ-закону:
@@ -182,25 +239,6 @@ const torionMeal = {
 // Скрытие пресета «Торион» — только на устройстве (не синхронизируется).
 const TORION_HIDDEN_KEY = 'nota.torion.v2';
 const loadTorionHidden = () => { try { return !!JSON.parse(localStorage.getItem(TORION_HIDDEN_KEY) || '{}').hidden; } catch { return false; } };
-
-// Ориентиры нутриентов — справочные значения ВОЗ/РДН, не персональная норма
-// и не медицинский расчёт. Белки — 2 г на кг веса (вес берётся из
-// самонаблюдения на устройстве, см. infrastructure/weight.js). ФЗ-152: состав
-// тела — спец. категория ПДн; ФЗ-323: персональные цели — вне телемедицины.
-function computeTargets(profile, prevDayLoad, weightKg) {
-  const sex = profile?.sex === 'm' ? 'm' : 'f';
-  const age = Number(profile?.age) || 34;
-  const protein = (weightKg && weightKg > 0) ? Math.round(2 * weightKg) : 60;
-  return {
-    protein,
-    fat: 70,
-    carb: 200,
-    fiber: 30,
-    sodium: 2000,
-    potassium: 3510,
-    magnesium: sex === 'm' ? (age > 30 ? 420 : 400) : (age > 30 ? 320 : 310),
-  };
-}
 
 function MealForm({ value, onChange, onSave, onClose, onRecalculate, onCatalogAdd, onCatalogRemove, title, busy, notice }) {
   const provenanceKey = { kcal: 'kcal', proteinG: 'protein_g', fatG: 'fat_g', carbG: 'carbs_g', fiberG: 'fiber_g', sodiumMg: 'sodium_mg', potassiumMg: 'potassium_mg', magnesiumMg: 'magnesium_mg' };
@@ -281,7 +319,6 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
   const [selectedDay, setSelectedDay] = useState(6);
   const [showToroidInfo, setShowToroidInfo] = useState(false);
   const [ringInfo, setRingInfo] = useState(null);
-  const [proteinInfo, setProteinInfo] = useState(false);
   const [activityTips, setActivityTips] = useState(false);
 
   useEffect(() => {
@@ -326,7 +363,11 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
       .reduce((sum, e) => sum + (Number(e.payload?.kcal) || 0), 0);
   }, [lists.activity, clock]);
   const weightKg = latestWeightKg();
-  const targets = useMemo(() => computeTargets(profile, prevDayLoad, weightKg), [profile, prevDayLoad, weightKg]);
+  const waistCm = latestWaistCm();
+  const targets = useMemo(() => computeNutritionTargets({
+    profile, weightKg, waistCm, lowCarb, lowCarbWeek,
+    previousActivityKcal: prevDayLoad,
+  }), [profile, prevDayLoad, weightKg, waistCm, lowCarb, lowCarbWeek]);
   const expenditure = dailyActivityExpenditure(visualActivities.map((entry) => entry.payload || {}));
   const molIndex = (() => { const hour = new Date(clock).getHours() + new Date(clock).getMinutes() / 60; return hour >= 7 && hour < 13 ? 0 : hour >= 13 && hour < 19 ? 1 : hour >= 19 || hour < 1 ? 2 : 3; })();
   const molPhases = [
@@ -733,32 +774,20 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
                 <div className="n-meal-list">{meals.length === 0 ? <span className="n-empty">приёмов пока нет — добавьте выше</span> : meals.map((meal, index) => <div className={`n-meal-row${index === meals.length - 1 ? ' latest' : ''}`} key={meal.id}><span>{formatHour(meal.hour)} · {mealType(meal.hour)} · <b>{meal.name}</b> · {Math.round(meal.kcal)} ккал</span><span className="n-row-actions"><button title="Поправить" onClick={() => { setEditing(meal); setFormNotice(''); setForm({ name: meal.name, time: formatHour(Math.min(meal.hour, currentMealMinute() / 60)), kcal: meal.kcal, proteinG: meal.p, fatG: meal.f, carbG: meal.c, fiberG: meal.fiber, sodiumMg: meal.entry.payload.sodiumMg, potassiumMg: meal.entry.payload.potassiumMg, magnesiumMg: meal.entry.payload.magnesiumMg, source: meal.entry.payload.source, confidence: meal.confidence, originalEstimate: meal.entry.payload.originalEstimate, components: meal.entry.payload.components || [], nutritionProvenance: meal.entry.payload.nutritionProvenance || {} }); }}>Поправить</button><button title="Повторить с другой порцией" onClick={() => openRepeat(meal)}>↻</button><button title="Удалить" onClick={() => updateEntry('meal', meal.entry.clientId, { ...meal.entry.payload, deleted: true })}>×</button></span></div>)}</div>
 
                 <div className="n-rings">
-                  <NutrientRing label="ккал" value={total.kcal} target={2200} color="#C8A96E" />
-                  <NutrientRing label="белки" value={total.p} target={targets.protein} color="#5D8A6E" onClick={() => setProteinInfo(true)} />
-                  <NutrientRing label="жиры" value={total.f} target={targets.fat} color="#B0685C" />
-                  <NutrientRing label="углеводы" value={total.c} target={targets.carb} color="#8A6F4D" />
+                  <NutrientRing label="ккал" value={total.kcal} target={targets.kcal} color="#C8A96E" onClick={() => setRingInfo({ key: 'kcal', label: 'Энергия', unit: 'ккал' })} />
+                  <NutrientRing label="белки" value={total.p} target={targets.protein} unit="г" color="#5D8A6E" onClick={() => setRingInfo({ key: 'protein', label: 'Белок', unit: 'г' })} />
+                  <NutrientRing label="жиры" value={total.f} target={targets.fat} unit="г" color="#B0685C" onClick={() => setRingInfo({ key: 'fat', label: 'Жиры', unit: 'г' })} />
+                  <NutrientRing label="углеводы" value={total.c} target={targets.carb} unit="г" color="#8A6F4D" onClick={() => setRingInfo({ key: 'carb', label: 'Углеводы', unit: 'г' })} />
                 </div>
                 <div className="n-rings">
-                  <NutrientRing label="клетчатка" value={total.fiber} target={targets.fiber} color="#7D9B6A" />
+                  <NutrientRing label="клетчатка" value={total.fiber} target={targets.fiber} unit="г" color="#7D9B6A" onClick={() => setRingInfo({ key: 'fiber', label: 'Клетчатка', unit: 'г' })} />
                   {MINERALS.map((m) => {
                     const target = targets[m.key];
                     const value = total[m.key];
-                    const { ratio, percent } = nutrientProgress(value, target);
-                    const C = 2 * Math.PI * 17;
-                    return (
-                      <button key={m.key} type="button" className="n-ring-cell n-ring-btn" onClick={() => setRingInfo({ ...m, target, value })}>
-                        <svg viewBox="0 0 42 42" className="n-ring-svg" aria-hidden="true">
-                          <circle cx="21" cy="21" r="17" fill="none" stroke="var(--line)" strokeWidth="3" />
-                          <circle cx="21" cy="21" r="17" fill="none" stroke={m.color} strokeWidth="3" strokeLinecap="round" transform="rotate(-90 21 21)" strokeDasharray={`${ratio * C} ${C}`} />
-                          <text x="21" y="24" textAnchor="middle">{percent}%</text>
-                        </svg>
-                        <span>{m.label}</span>
-                        <small>{Math.round(value)}/{target} {m.unit}</small>
-                      </button>
-                    );
+                    return <NutrientRing key={m.key} label={m.label} value={value} target={target} unit={m.unit} color={m.color} onClick={() => setRingInfo(m)} />;
                   })}
                 </div>
-                <p className="n-ring-sub">ориентиры нутриентов — справочные значения (ВОЗ/РДН), не персональная норма; минералы — из оценки блюд (иначе 0)</p>
+                <p className="n-ring-sub">расчётные ориентиры, не медицинское назначение · нажмите кольцо, чтобы увидеть формулу</p>
                 <Axis label="промышленная обработка" value={processing} confidence={meals.length ? 'эвристика' : '—'} />
                 <Axis label="цельность · полнота" value={meals.length ? 1 - processing : 0} confidence={meals.length ? 'эвристика' : '—'} />
                 <Axis label="гликемия · созвучие" value={Math.min(1, total.c / 180)} confidence={meals.length ? 'оценка' : '—'} />
@@ -820,7 +849,7 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
               <section className="n-panel">
                 <p className="n-panel-label">день · ориентиры</p>
                 <div className="n-kv"><span>приход за день</span><b>{Math.round(total.kcal)} ккал</b></div><div className="n-kv"><span>расход (активности)</span><b>{Math.round(expenditure)} ккал</b></div>
-                <div className="lowcarb"><p><span>плавный переход на низкоуглеводное</span><button className={lowCarb ? 'on' : ''} onClick={() => setLowCarb((value) => !value)}>{lowCarb ? 'вкл' : 'выкл'}</button></p>{lowCarb && <><div className="n-control"><div><span>неделя перехода</span><b>{lowCarbWeek} из 8</b></div><input type="range" min="1" max="8" value={lowCarbWeek} onChange={(event) => setLowCarbWeek(Number(event.target.value))} /></div><div className="n-kv"><span>цель углеводов</span><b>{Math.round(60 - (lowCarbWeek - 1) * 2)} г/день</b></div><div className="n-kv"><span>углеводы сегодня</span><b>{Math.round(total.c)} г</b></div></>}</div>
+                <div className="lowcarb"><p><span>плавный переход на низкоуглеводное</span><button className={lowCarb ? 'on' : ''} onClick={() => setLowCarb((value) => !value)}>{lowCarb ? 'вкл' : 'выкл'}</button></p>{lowCarb && <><div className="n-control"><div><span>неделя перехода</span><b>{lowCarbWeek} из 8</b></div><input type="range" min="1" max="8" value={lowCarbWeek} onChange={(event) => setLowCarbWeek(Number(event.target.value))} /></div><div className="n-kv"><span>ориентир углеводов</span><b>{targets.carb} г/день</b></div><div className="n-kv"><span>углеводы сегодня</span><b>{Math.round(total.c)} г</b></div></>}</div>
                 <button className="n-action ghost" onClick={() => { meals.forEach((meal) => updateEntry('meal', meal.entry.clientId, { ...meal.entry.payload, deleted: true })); activities.forEach((entry) => updateEntry('activity', entry.clientId, { ...entry.payload, deleted: true })); }}>Очистить день</button>
               </section>
 
@@ -948,18 +977,8 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
         <Sheet onClose={() => setRingInfo(null)}>
           <button className="tbtn" onClick={() => setRingInfo(null)}>← Закрыть</button>
           <h2>{ringInfo.label}</h2>
-          <p className="dim small">{ringInfo.value ? `${Math.round(ringInfo.value)} ${ringInfo.unit} · ${ringInfo.key === 'sodium' ? 'верхний ориентир' : 'суточный ориентир'} ${ringInfo.target} ${ringInfo.unit}` : 'нет данных за день'}</p>
-          <p className="dim small">{ringInfo.src}</p>
-          <a className="zdorov-link" href="https://torion.shop" target="_blank" rel="noopener">восполнить минералы — torion.shop →</a>
-        </Sheet>
-      )}
-
-      {proteinInfo && (
-        <Sheet onClose={() => setProteinInfo(false)}>
-          <button className="tbtn" onClick={() => setProteinInfo(false)}>← Закрыть</button>
-          <h2>Белок</h2>
-          <p className="dim small">Рекомендация по распределению: около половины суточной нормы белка старайтесь получить за один приём в пищевом окне с 8 до 14 часов.</p>
-          <p className="dim small">Суточная норма белка — 2 г на кг веса (ориентир, не медицинская рекомендация). Вес берётся из самонаблюдения во вкладке «Динамика» и хранится только на устройстве. Если вес не указан — норма 60 г.</p>
+          <TargetInfo info={ringInfo} targets={targets} total={total} />
+          {['sodium', 'potassium', 'magnesium'].includes(ringInfo.key) && <a className="zdorov-link" href="https://torion.shop" target="_blank" rel="noopener">продукт с минералами — torion.shop →</a>}
         </Sheet>
       )}
 

@@ -46,6 +46,15 @@ let browser;
       })
     : 0;
   await page.screenshot({ path: 'C:/tmp/nota-mobile-nutrition.png', fullPage: true });
+  const mineralRingTops = await page.locator('.n-rings').nth(1).locator('.n-ring-svg').evaluateAll((nodes) => nodes.map((node) => Math.round(node.getBoundingClientRect().top * 10) / 10));
+  const mineralRingsAligned = mineralRingTops.length === 4 && Math.max(...mineralRingTops) - Math.min(...mineralRingTops) <= 1;
+  await page.locator('.n-ring-btn', { hasText: 'белки' }).click();
+  const proteinFormulaVisible = await page.getByText(/1,6 г × кг расчётной безжировой массы/).isVisible();
+  await page.getByRole('button', { name: '← Закрыть' }).click();
+  await page.locator('.lowcarb button').click();
+  await page.locator('.n-ring-btn', { hasText: 'натрий' }).click();
+  const lowCarbSodiumVisible = await page.getByText(/2300 мг как верхний ориентир/).isVisible();
+  await page.getByRole('button', { name: '← Закрыть' }).click();
   await page.getByRole('button', { name: /Вручную/ }).click();
   await page.getByRole('searchbox', { name: 'Продукт', exact: true }).fill('яблоко');
   await page.locator('.food-results button').first().click();
@@ -199,12 +208,12 @@ let browser;
   await desktopPage.screenshot({ path: 'C:/tmp/nota-desktop-practice-full.png', fullPage: true });
   await desktop.close();
   if (failures.length) throw new Error(failures.join('\n'));
-  if (!catalogSourceVisible || !catalogAutofillWorks || !mealRecalculationAvailable || !mealRecalculationConsentGuard || !threeMealsSaved || !nutritionCanvasCentered || !yesterdayMealsReady || !yesterdayMealsRemainInteractive || !torionDefaultVisible || !activityTipsVisible || !activityStartsNow || !activityEditSaved || !quickActivitySaved || !stepsTransferredToToday) {
-    throw new Error(`nutrition regression: catalog=${catalogSourceVisible}/${catalogAutofillWorks}, recalculation=${mealRecalculationAvailable}/${mealRecalculationConsentGuard}, threeMealsSaved=${threeMealsSaved}, centered=${nutritionCanvasCentered}, yesterdayDelete=${yesterdayMealsReady}/${yesterdayMealsRemainInteractive}, torionDefaultVisible=${torionDefaultVisible}, activityTipsVisible=${activityTipsVisible}, activityStartsNow=${activityStartsNow}, activityEditSaved=${activityEditSaved}, quickActivitySaved=${quickActivitySaved}, stepsTransferredToToday=${stepsTransferredToToday}`);
+  if (!mineralRingsAligned || !proteinFormulaVisible || !lowCarbSodiumVisible || !catalogSourceVisible || !catalogAutofillWorks || !mealRecalculationAvailable || !mealRecalculationConsentGuard || !threeMealsSaved || !nutritionCanvasCentered || !yesterdayMealsReady || !yesterdayMealsRemainInteractive || !torionDefaultVisible || !activityTipsVisible || !activityStartsNow || !activityEditSaved || !quickActivitySaved || !stepsTransferredToToday) {
+    throw new Error(`nutrition regression: rings=${mineralRingsAligned}/${mineralRingTops.join(',')}, targets=${proteinFormulaVisible}/${lowCarbSodiumVisible}, catalog=${catalogSourceVisible}/${catalogAutofillWorks}, recalculation=${mealRecalculationAvailable}/${mealRecalculationConsentGuard}, threeMealsSaved=${threeMealsSaved}, centered=${nutritionCanvasCentered}, yesterdayDelete=${yesterdayMealsReady}/${yesterdayMealsRemainInteractive}, torionDefaultVisible=${torionDefaultVisible}, activityTipsVisible=${activityTipsVisible}, activityStartsNow=${activityStartsNow}, activityEditSaved=${activityEditSaved}, quickActivitySaved=${quickActivitySaved}, stepsTransferredToToday=${stepsTransferredToToday}`);
   }
   console.log(JSON.stringify({
     status: response.status(), failures, nutritionVisible, nutritionPixels, practiceVisible, practicePixels,
-    momentCheckInSaved, daySummarySaved, catalogSourceVisible, catalogAutofillWorks, manualMealSaved, mealRecalculationAvailable, mealRecalculationConsentGuard, repeatedMealSaved, threeMealsSaved,
+    momentCheckInSaved, daySummarySaved, mineralRingTops, mineralRingsAligned, proteinFormulaVisible, lowCarbSodiumVisible, catalogSourceVisible, catalogAutofillWorks, manualMealSaved, mealRecalculationAvailable, mealRecalculationConsentGuard, repeatedMealSaved, threeMealsSaved,
     nutritionCanvasMetrics, nutritionCanvasCentered, yesterdayMealsReady, yesterdayMealsRemainInteractive, torionDefaultVisible, activityTipsVisible, activityStartsNow, activityEditSaved, quickActivitySaved, stepsTransferredToToday, audioVisible, practiceSaved, pulseMeasured, explainableInsightsVisible,
   }, null, 2));
   await browser.close();

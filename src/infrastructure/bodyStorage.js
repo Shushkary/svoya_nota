@@ -53,3 +53,9 @@ export function clearMeasurements(state) {
   saveBody(next); return next;
 }
 export function getSeries(state) { return [...state.measurements].sort((a, b) => a.at.localeCompare(b.at)); }
+export function latestWaistCm() {
+  const series = getSeries(loadBody());
+  if (!series.length) return null;
+  const cm = Number(series[series.length - 1].cm);
+  return Number.isFinite(cm) && cm > 0 ? cm : null;
+}
