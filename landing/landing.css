@@ -1,0 +1,153 @@
+/* Лендинг «Своя нота» — дополняет базовый /styles.css сайта torion.shop.
+   Переменные (--paper, --ink, --copper, --serif, --sans …) наследуются оттуда. */
+
+/* ---------- Общая сетка секций ---------- */
+.band { padding: 76px 0; border-top: 1px solid var(--line); }
+.band.alt { background: var(--paper-2); }
+.section-lead { font-size: 19px; color: var(--muted); max-width: 760px; margin-bottom: 40px; }
+.why { color: var(--muted); font-size: 14px; }
+
+.two-col { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 54px; align-items: start; }
+
+/* ---------- Первый экран ---------- */
+.hero-nota { padding: 58px 0 70px; }
+.hero-nota-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 400px); gap: 54px; align-items: center; }
+.hero-nota h1 { font-size: 84px; line-height: .9; margin-bottom: 20px; }
+.hero-nota .lead em { font-style: italic; color: var(--ink); }
+
+/* ---------- Тороид ---------- */
+.toroid-figure { margin: 0; }
+.toroid-figure svg { width: 100%; height: auto; }
+.toroid-figure figcaption { margin-top: 14px; color: var(--muted); font-size: 14px; text-align: center; line-height: 1.45; }
+.arc {
+  fill: none;
+  stroke-width: 9;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 160px 160px;
+}
+/* stroke-dasharray работает в единицах pathLength="100" — процент заполнения дуги */
+.arc-nutrition { stroke: var(--green);       stroke-dasharray: 72 28; }
+.arc-feelings  { stroke: var(--copper);      stroke-dasharray: 58 42; }
+.arc-mind      { stroke: var(--copper-dark); stroke-dasharray: 44 56; }
+.arc-will      { stroke: #8C6B4A;            stroke-dasharray: 36 64; }
+.core-label { font-family: var(--sans); font-size: 13px; font-weight: 600; fill: #fff; letter-spacing: .04em; }
+
+/* ---------- Карточки ---------- */
+.cards { display: grid; gap: 18px; }
+.cards.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.cards.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.card {
+  background: rgba(255, 255, 255, .62);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 22px 20px;
+}
+.band.alt .card { background: rgba(255, 255, 255, .72); }
+.card h3 { font-family: var(--sans); font-size: 16px; font-weight: 700; margin-bottom: 9px; }
+.card p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.5; }
+.card.accent { background: var(--ink); border-color: var(--ink); }
+.card.accent h3 { color: #fff; }
+.card.accent p { color: rgba(245, 240, 233, .8); }
+
+/* ---------- Неделя ---------- */
+.week-list { list-style: none; margin: 0 0 34px; padding: 0; display: grid; gap: 2px; }
+.week-list li {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  gap: 20px;
+  align-items: start;
+  padding: 19px 0;
+  border-top: 1px solid var(--line);
+}
+.week-list li:last-child { border-bottom: 1px solid var(--line); }
+.daynum {
+  font-family: var(--serif);
+  font-size: 38px;
+  line-height: 1;
+  color: var(--copper);
+  text-align: center;
+}
+.week-list h3 { font-family: var(--sans); font-size: 17px; font-weight: 700; margin-bottom: 5px; }
+.week-list p { margin: 0; color: var(--muted); font-size: 15px; }
+
+/* ---------- Выноски ---------- */
+.callout {
+  background: rgba(255, 255, 255, .7);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 26px 28px;
+}
+.band.alt .callout { background: rgba(255, 255, 255, .8); }
+.callout + .callout { margin-top: 18px; }
+.callout.tight { padding: 22px 24px; }
+.callout h3 { font-family: var(--sans); font-size: 17px; font-weight: 700; margin-bottom: 10px; }
+.callout p { margin: 0 0 10px; color: var(--muted); font-size: 15px; }
+.callout p:last-child { margin-bottom: 0; }
+.callout strong { color: var(--ink); }
+
+/* ---------- Метрики тороида ---------- */
+.metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.metric { padding: 24px 22px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255, 255, 255, .58); }
+.metric h3 { font-family: var(--serif); font-size: 25px; margin-bottom: 10px; color: var(--copper-dark); }
+.metric p { margin: 0 0 9px; color: var(--muted); font-size: 14.5px; line-height: 1.5; }
+.metric p:last-child { margin-bottom: 0; }
+.metric strong { color: var(--ink); }
+.metric.accent { background: var(--ink); border-color: var(--ink); }
+.metric.accent h3 { color: #E9C79B; }
+.metric.accent p { color: rgba(245, 240, 233, .82); }
+.metric.accent strong { color: #fff; }
+
+/* ---------- Списки ---------- */
+.limits, .price-list { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 11px; }
+.limits li, .price-list li { position: relative; padding-left: 26px; color: var(--muted); font-size: 15px; }
+.limits li::before {
+  content: "";
+  position: absolute;
+  left: 4px; top: 9px;
+  width: 11px; height: 2px;
+  background: var(--danger);
+  border-radius: 2px;
+}
+.price-list li::before {
+  content: "";
+  position: absolute;
+  left: 4px; top: 7px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--copper);
+}
+.price-list strong { color: var(--ink); }
+
+/* ---------- Финальный призыв ---------- */
+.cta-band { background: var(--ink); color: var(--paper); padding: 62px 0; }
+.cta-inner { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 40px; align-items: center; }
+.cta-band h2 { color: #fff; margin-bottom: 12px; }
+.cta-band p { margin: 0; color: rgba(245, 240, 233, .78); font-size: 17px; max-width: 560px; }
+.cta-actions { display: grid; gap: 14px; justify-items: start; }
+.cta-actions .link-row { margin: 0; }
+.cta-band .link-row a { border-color: rgba(245, 240, 233, .35); color: rgba(245, 240, 233, .9); }
+.cta-band .link-row a:hover { background: rgba(245, 240, 233, .1); }
+
+/* ---------- Адаптив ---------- */
+@media (max-width: 1000px) {
+  .cards.five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cards.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hero-nota-grid, .two-col { grid-template-columns: minmax(0, 1fr); gap: 38px; }
+  .toroid-figure { max-width: 340px; margin: 0 auto; }
+  .hero-nota h1 { font-size: 64px; }
+  .cta-inner { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .band { padding: 52px 0; }
+  .hero-nota { padding: 40px 0 52px; }
+  .hero-nota h1 { font-size: 50px; }
+  .hero-nota .lead { font-size: 18px; }
+  .section-lead { font-size: 17px; margin-bottom: 30px; }
+  .cards.five, .cards.three, .metrics { grid-template-columns: minmax(0, 1fr); }
+  .week-list li { grid-template-columns: 46px 1fr; gap: 14px; }
+  .daynum { font-size: 30px; }
+  .nav { display: none; }
+}
