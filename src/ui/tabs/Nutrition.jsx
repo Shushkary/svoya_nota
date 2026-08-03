@@ -3,7 +3,7 @@ import { errorText, api } from '../../infrastructure/api.js';
 import { prepareMealImage } from '../../infrastructure/image-processing.js';
 import { aggregateMeals, clampMealTimestamp, combinedDigestiveLoad, digestionActivityAt, digestionFinishesBy, estimateDigestionHours, effectiveDigestionHours, estimateProcessing, mealTimestamp, nutrientProgress, processingScore, scaleMealPayload } from '../../domain/nutrition/meal.js';
 import { computeNutritionTargets } from '../../domain/nutrition/targets.js';
-import { dailyActivityExpenditure, estimateActivityCalories, estimateStepCalories, findFreeActivityStart } from '../../domain/nutrition/activity.js';
+import { estimateActivityNutritionImpact, findFreeActivityStart } from '../../domain/nutrition/activity.js';
 import { formatHour, mealType, normalizeHour } from '../../domain/nutrition/rhythm.js';
 import { parseGs1, isValidGtin } from '../../domain/barcode.js';
 import { latestWeightKg } from '../../infrastructure/weight.js';
@@ -131,6 +131,17 @@ function TargetInfo({ info, targets, total }) {
     fiber: 'fiberGPerKg', sodium: 'sodiumMgPerKg', potassium: 'potassiumMgPerKg', magnesium: 'magnesiumMgPerKg',
   }[info.key];
   const rate = basis.rates[rateKey];
+  const activityAdditions = {
+    kcal: basis.activityImpact.energyKcal,
+    protein: basis.activityImpact.proteinG,
+    fat: basis.activityImpact.fatG,
+    carb: basis.activityImpact.carbG,
+    fiber: basis.activityImpact.fiberG,
+    sodium: basis.activityImpact.sodiumMg,
+    potassium: basis.activityImpact.potassiumMg,
+    magnesium: basis.activityImpact.magnesiumMg,
+  };
+  const activityAddition = activityAdditions[info.key] || 0;
   const referenceText = basis.method === 'rfm'
     ? `Опорная масса ${basis.referenceKg} кг — расчётная безжировая масса: вес без оценённой жировой доли ${basis.bodyFatPercent}%. Оценка RFM использует рост, талию и пол.`
     : basis.method === 'boer'
@@ -141,34 +152,38 @@ function TargetInfo({ info, targets, total }) {
     : null;
 
   return <>
-    <p className="dim small">{value ? `${Math.round(value)} ${info.unit} за сегодня · ` : 'Нет данных за сегодня · '}{info.key === 'sodium' ? 'верхний ориентир' : 'расчётный ориентир'} {target} {info.unit}.</p>
+    <p className="dim small">{value ? `${Math.round(value)} ${info.unit} за сегодня · ` : 'Нет данных за сегодня · '}расчётный ориентир {target} {info.unit}.</p>
     {['kcal', 'protein', 'fat', 'carb', 'fiber'].includes(info.key) && <p className="dim small">{referenceText}</p>}
     {commonRate && <p className="dim small">Эквивалент текущего расчёта: {commonRate}</p>}
+    {activityAddition > 0 && <div className="n-activity-impact"><b>Активность учтена</b><span>базовый ориентир: {basis.baseTargets[info.key]} {info.unit}</span><span>добавлено по модели расхода: +{Math.round(activityAddition * 10) / 10} {info.unit}</span><span>итого для кольца: {target} {info.unit}</span></div>}
 
-    {info.key === 'kcal' && <p className="dim small">Энергия оценивается по основному обмену: по безжировой массе, когда доступны талия и профиль; иначе по формуле Миффлина—Сан Жеора. Добавляется спокойный коэффициент повседневной активности и фактическая активность предыдущего дня. Это стартовый ориентир, а не цель снижения веса.</p>}
+    {info.key === 'kcal' && <p className="dim small">Энергия оценивается по основному обмену: по безжировой массе, когда доступны талия и профиль; иначе по формуле Миффлина—Сан Жеора. Добавляется спокойный коэффициент повседневной активности и активность, внесённая за текущий день. Это стартовый ориентир, а не цель снижения веса.</p>}
     {info.key === 'protein' && <>
       <p className="dim small">Формула приложения: 1,6 г × кг расчётной безжировой массы. Жировая доля не увеличивает цель. Безжировая масса включает не только мышцы, но также воду, кости и органы — приложение не выдаёт её за измеренную мышечную массу.</p>
       <p className="dim small">Важно: метаанализ 1,6 г/кг относится к общей массе тела у здоровых взрослых с силовыми тренировками. Расчёт по безжировой массе — более консервативная адаптация приложения, а не дословная норма исследования.</p>
     </>}
     {info.key === 'fat' && <p className="dim small">В обычном режиме стартовый ориентир близок к 1 г/кг расчётной массы. В низкоуглеводном режиме жиры заполняют оставшуюся энергию после белка и выбранного уровня углеводов; значение ограничено диапазоном 0,8–2 г/кг.</p>}
     {info.key === 'carb' && <p className="dim small">В обычном режиме стартовый ориентир — около 3 г/кг расчётной массы. При включённом низкоуглеводном переходе кольцо синхронизируется со шкалой: от 60 до 46 г/день за восемь недель.</p>}
-    {info.key === 'fiber' && <p className="dim small">Клетчатка считается из энергетического ориентира: 14 г на 1000 ккал, с практическим диапазоном 25–50 г/день. Повышать количество лучше постепенно и вместе с достаточным питьём.</p>}
+    {info.key === 'fiber' && <p className="dim small">Клетчатка не расходуется мышцами. Активность увеличивает энергетический ориентир, поэтому связанный ориентир клетчатки пересчитывается как 14 г на 1000 ккал. Повышать количество лучше постепенно и вместе с достаточным питьём.</p>}
     {info.key === 'sodium' && <>
-      <p className="dim small">{basis.lowCarb ? 'Низкоуглеводный режим включён: кольцо использует 2300 мг как верхний ориентир, а не как обязательную цель. В начале ограничения углеводов возможна краткая потеря натрия, но клинический консенсус рекомендует добавлять соль только при симптомах гипотонии и отсутствии противопоказаний.' : 'Обычный режим: используется предел ВОЗ менее 2000 мг натрия в день (примерно 5 г соли). При включении низкоуглеводного перехода расчёт меняется, но не превращается в рекомендацию обязательно досаливать пищу.'}</p>
+      <p className="dim small">{basis.lowCarb ? 'Низкоуглеводный режим включён: базовый верхний ориентир — 2300 мг. В начале ограничения углеводов возможна краткая потеря натрия, но клинический консенсус рекомендует добавлять соль только при симптомах гипотонии и отсутствии противопоказаний.' : 'Обычный режим: базовый предел ВОЗ — менее 2000 мг натрия в день (примерно 5 г соли).'}</p>
+      {basis.activityImpact.sodiumMg > 0 && <p className="dim small">Добавка к кольцу — приблизительная компенсация потерь с потом, а не разрешение употребить больше соли. Без измерения изменения массы тела и состава пота ошибка может быть большой.</p>}
       <p className="dim small">При гипертонии, болезнях почек или сердца, отёках, беременности либо приёме мочегонных ориентир должен определять врач.</p>
     </>}
-    {info.key === 'potassium' && <p className="dim small">Ориентир National Academies для взрослых: 3400 мг/день для мужчин и 2600 мг/день для женщин. Это адекватное потребление, не точная индивидуальная потребность. При болезнях почек и лекарствах, влияющих на калий, нужна консультация врача.</p>}
-    {info.key === 'magnesium' && <p className="dim small">RDA для взрослых: 400–420 мг/день для мужчин и 310–320 мг/день для женщин в зависимости от возраста. Официальный ориентир не масштабируется линейно по килограммам; значение мг/кг выше показано только как эквивалент текущего расчёта.</p>}
+    {info.key === 'potassium' && <p className="dim small">Базовый ориентир National Academies для взрослых: 3400 мг/день для мужчин и 2600 мг/день для женщин. Добавка активности — грубая оценка потерь с потом. При болезнях почек и лекарствах, влияющих на калий, нужна консультация врача.</p>}
+    {info.key === 'magnesium' && <p className="dim small">Базовый RDA для взрослых: 400–420 мг/день для мужчин и 310–320 мг/день для женщин в зависимости от возраста. Добавка активности — грубая оценка потерь с потом. Официальный ориентир не масштабируется линейно по килограммам.</p>}
 
     <p className="eyebrow" style={{ marginTop: 14 }}>Методика и источники</p>
     <div className="linkrow">
       {['kcal', 'protein', 'fat', 'carb', 'fiber'].includes(info.key) && <><a href="https://pubmed.ncbi.nlm.nih.gov/30030479/" target="_blank" rel="noopener noreferrer">RFM: оценка доли жира по росту и талии</a><a href="https://pubmed.ncbi.nlm.nih.gov/6496691/" target="_blank" rel="noopener noreferrer">Boer: запасная оценка безжировой массы</a></>}
       {info.key === 'kcal' && <><a href="https://pubmed.ncbi.nlm.nih.gov/7435418/" target="_blank" rel="noopener noreferrer">Cunningham: основной обмен и безжировая масса</a><a href="https://pubmed.ncbi.nlm.nih.gov/2305711/" target="_blank" rel="noopener noreferrer">Mifflin—St Jeor: запасная формула</a></>}
       {info.key === 'protein' && <a href="https://bjsm.bmj.com/content/52/6/376" target="_blank" rel="noopener noreferrer">Метаанализ белка и силовых тренировок</a>}
+      {['kcal', 'protein', 'fat', 'carb'].includes(info.key) && <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC5766985/" target="_blank" rel="noopener noreferrer">Интенсивность и выбор топлива при нагрузке</a>}
       {info.key === 'fiber' && <a href="https://nap.nationalacademies.org/catalog/10490/" target="_blank" rel="noopener noreferrer">National Academies: клетчатка</a>}
       {info.key === 'sodium' && <><a href="https://www.who.int/publications/i/item/9789241504836" target="_blank" rel="noopener noreferrer">ВОЗ: натрий у взрослых</a><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8610544/" target="_blank" rel="noopener noreferrer">Международный консенсус по кетогенным диетам</a></>}
       {info.key === 'potassium' && <a href="https://nap.nationalacademies.org/read/25353/chapter/8" target="_blank" rel="noopener noreferrer">National Academies: калий</a>}
       {info.key === 'magnesium' && <a href="https://www.ncbi.nlm.nih.gov/books/NBK109816/" target="_blank" rel="noopener noreferrer">National Academies: магний</a>}
+      {['sodium', 'potassium', 'magnesium'].includes(info.key) && <a href="https://pubmed.ncbi.nlm.nih.gov/28332116/" target="_blank" rel="noopener noreferrer">Вариабельность пота и потерь натрия</a>}
     </div>
   </>;
 }
@@ -353,22 +368,17 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
   const visualActivities = stepVisualActivity
     ? [...timedActivities, { payload: stepVisualActivity, clientId: `steps-${today}` }]
     : timedActivities;
-  const tdee = 2000; // базовый ориентир потребности (TDEE исключён по ФЗ-152); заглушка, не ломающая рендер
-
-  const prevDayLoad = useMemo(() => {
-    const yest = new Date(clock); yest.setDate(yest.getDate() - 1);
-    const yKey = localDay(yest);
-    return lists.activity
-      .filter((e) => !e.payload?.deleted && localDay(e.at) === yKey)
-      .reduce((sum, e) => sum + (Number(e.payload?.kcal) || 0), 0);
-  }, [lists.activity, clock]);
   const weightKg = latestWeightKg();
   const waistCm = latestWaistCm();
-  const targets = useMemo(() => computeNutritionTargets({
+  const activityImpact = estimateActivityNutritionImpact(
+    visualActivities.map((entry) => entry.payload || {}),
+    { weightKg: weightKg || 70, lowCarb },
+  );
+  const targets = computeNutritionTargets({
     profile, weightKg, waistCm, lowCarb, lowCarbWeek,
-    previousActivityKcal: prevDayLoad,
-  }), [profile, prevDayLoad, weightKg, waistCm, lowCarb, lowCarbWeek]);
-  const expenditure = dailyActivityExpenditure(visualActivities.map((entry) => entry.payload || {}));
+    activityImpact,
+  });
+  const expenditure = activityImpact.energyKcal;
   const molIndex = (() => { const hour = new Date(clock).getHours() + new Date(clock).getMinutes() / 60; return hour >= 7 && hour < 13 ? 0 : hour >= 13 && hour < 19 ? 1 : hour >= 19 || hour < 1 ? 2 : 3; })();
   const molPhases = [
     ['Пробуждение ритма', '07:00–13:00', 'Внутренние часы встречают день: система CLOCK–BMAL1 помогает клеткам включать дневные программы. Организм бодро настраивается на свет, движение и регулярные приёмы пищи.'],
@@ -519,7 +529,9 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
     const safeType = ACTIVITY[type] ? type : 'walk_brisk';
     const occupied = activities.filter((entry) => entry.clientId !== target?.clientId).map((entry) => entry.payload || {});
     const startMin = findFreeActivityStart(occupied, requestedStartMin, durationMin);
-    const kcal = suppliedKcal ?? estimateActivityCalories(safeType, durationMin);
+    const kcal = suppliedKcal ?? estimateActivityNutritionImpact([
+      { type: safeType, startMin, durationMin, intensity },
+    ], { weightKg: weightKg || 70, lowCarb }).energyKcal;
     const at = new Date(); at.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
     const payload = { type: safeType, label: ACTIVITY[safeType][0], intensity, durationMin, startMin, kcal, steps, dailySteps, date: today, source, deleted: false };
     if (target) updateEntry('activity', target.clientId, payload);
@@ -560,7 +572,6 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
       durationMin: 30,
       requestedStartMin: currentMealMinute(),
       source: 'tracker',
-      kcal: estimateActivityCalories('run', 30),
       replaceEditing: false,
     });
   };
@@ -788,6 +799,13 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
                   })}
                 </div>
                 <p className="n-ring-sub">расчётные ориентиры, не медицинское назначение · нажмите кольцо, чтобы увидеть формулу</p>
+                {activityImpact.energyKcal > 0 && <div className="n-activity-impact-summary">
+                  <b>Активность учтена в кольцах</b>
+                  <span>энергия +{activityImpact.energyKcal} ккал</span>
+                  <span>топливо: Б +{activityImpact.proteinG} · Ж +{activityImpact.fatG} · У +{activityImpact.carbG} г</span>
+                  <span>потери с потом, оценка: Na +{activityImpact.sodiumMg} · K +{activityImpact.potassiumMg} · Mg +{activityImpact.magnesiumMg} мг</span>
+                  <small>Клетчатка не расходуется; её ориентир пересчитан по общей энергии. Потери с потом индивидуальны.</small>
+                </div>}
                 <Axis label="промышленная обработка" value={processing} confidence={meals.length ? 'эвристика' : '—'} />
                 <Axis label="цельность · полнота" value={meals.length ? 1 - processing : 0} confidence={meals.length ? 'эвристика' : '—'} />
                 <Axis label="гликемия · созвучие" value={Math.min(1, total.c / 180)} confidence={meals.length ? 'оценка' : '—'} />
@@ -855,7 +873,7 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
 
               <section className="n-panel">
                 <p className="n-panel-label">неделя по дням</p>
-                <div className="nutrition-week">{weekDays.map((day, index) => { const height = day.kcal ? Math.max(5, Math.min(100, day.kcal / Math.max(tdee || 2000, 1) * 100)) : 2; return <button className={`${day.current ? 'current ' : ''}${selectedDay === index ? 'selected' : ''}`} key={day.key} onClick={() => setSelectedDay(index)}><span><i style={{ height: `${height}%`, background: day.kcal <= (tdee || 2000) ? '#5D8A6E' : '#B0685C' }} /></span><b>{day.kcal ? '●' : '○'}</b><small>{day.label}</small></button>; })}</div>
+                <div className="nutrition-week">{weekDays.map((day, index) => { const height = day.kcal ? Math.max(5, Math.min(100, day.kcal / Math.max(targets.kcal, 1) * 100)) : 2; return <button className={`${day.current ? 'current ' : ''}${selectedDay === index ? 'selected' : ''}`} key={day.key} onClick={() => setSelectedDay(index)}><span><i style={{ height: `${height}%`, background: day.kcal <= targets.kcal ? '#5D8A6E' : '#B0685C' }} /></span><b>{day.kcal ? '●' : '○'}</b><small>{day.label}</small></button>; })}</div>
                 <p className="week-detail">{weekDays[selectedDay].kcal ? `${weekDays[selectedDay].label}: ${Math.round(weekDays[selectedDay].kcal)} ккал · клетчатка ${Math.round(weekDays[selectedDay].fiber)} г` : `${weekDays[selectedDay].label}: данных нет`}</p>
               </section>
             </div>

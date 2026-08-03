@@ -53,7 +53,7 @@ let browser;
   await page.getByRole('button', { name: '← Закрыть' }).click();
   await page.locator('.lowcarb button').click();
   await page.locator('.n-ring-btn', { hasText: 'натрий' }).click();
-  const lowCarbSodiumVisible = await page.getByText(/2300 мг как верхний ориентир/).isVisible();
+  const lowCarbSodiumVisible = await page.getByText(/базовый верхний ориентир.*2300 мг/).isVisible();
   await page.getByRole('button', { name: '← Закрыть' }).click();
   await page.getByRole('button', { name: /Вручную/ }).click();
   await page.getByRole('searchbox', { name: 'Продукт', exact: true }).fill('яблоко');
@@ -147,7 +147,13 @@ let browser;
   const activityStartMinute = Number(await activityPanel.locator('input[type="range"]').nth(1).inputValue());
   const browserMinute = await page.evaluate(() => new Date().getHours() * 60 + new Date().getMinutes());
   const activityStartsNow = Math.abs(activityStartMinute - browserMinute) <= 2;
+  const carbRingBeforeActivity = await page.locator('.n-ring-btn', { hasText: 'углеводы' }).locator('small').innerText();
   await activityPanel.getByRole('button', { name: 'Добавить активность вручную' }).click();
+  const carbRingAfterActivity = await page.locator('.n-ring-btn', { hasText: 'углеводы' }).locator('small').innerText();
+  const activityAffectsRings = carbRingAfterActivity !== carbRingBeforeActivity;
+  const activityImpactSummaryVisible = await page.getByText('Активность учтена в кольцах').isVisible()
+    && await page.getByText(/потери с потом, оценка/).isVisible();
+  await page.screenshot({ path: 'C:/tmp/nota-mobile-activity-rings.png', fullPage: true });
   const activityRow = activityPanel.locator('.n-meal-row', { hasText: 'ходьба (бодро)' });
   await activityRow.getByTitle('Поправить').click();
   await activityPanel.locator('select').selectOption('yoga');
@@ -208,13 +214,13 @@ let browser;
   await desktopPage.screenshot({ path: 'C:/tmp/nota-desktop-practice-full.png', fullPage: true });
   await desktop.close();
   if (failures.length) throw new Error(failures.join('\n'));
-  if (!mineralRingsAligned || !proteinFormulaVisible || !lowCarbSodiumVisible || !catalogSourceVisible || !catalogAutofillWorks || !mealRecalculationAvailable || !mealRecalculationConsentGuard || !threeMealsSaved || !nutritionCanvasCentered || !yesterdayMealsReady || !yesterdayMealsRemainInteractive || !torionDefaultVisible || !activityTipsVisible || !activityStartsNow || !activityEditSaved || !quickActivitySaved || !stepsTransferredToToday) {
-    throw new Error(`nutrition regression: rings=${mineralRingsAligned}/${mineralRingTops.join(',')}, targets=${proteinFormulaVisible}/${lowCarbSodiumVisible}, catalog=${catalogSourceVisible}/${catalogAutofillWorks}, recalculation=${mealRecalculationAvailable}/${mealRecalculationConsentGuard}, threeMealsSaved=${threeMealsSaved}, centered=${nutritionCanvasCentered}, yesterdayDelete=${yesterdayMealsReady}/${yesterdayMealsRemainInteractive}, torionDefaultVisible=${torionDefaultVisible}, activityTipsVisible=${activityTipsVisible}, activityStartsNow=${activityStartsNow}, activityEditSaved=${activityEditSaved}, quickActivitySaved=${quickActivitySaved}, stepsTransferredToToday=${stepsTransferredToToday}`);
+  if (!mineralRingsAligned || !proteinFormulaVisible || !lowCarbSodiumVisible || !activityAffectsRings || !activityImpactSummaryVisible || !catalogSourceVisible || !catalogAutofillWorks || !mealRecalculationAvailable || !mealRecalculationConsentGuard || !threeMealsSaved || !nutritionCanvasCentered || !yesterdayMealsReady || !yesterdayMealsRemainInteractive || !torionDefaultVisible || !activityTipsVisible || !activityStartsNow || !activityEditSaved || !quickActivitySaved || !stepsTransferredToToday) {
+    throw new Error(`nutrition regression: rings=${mineralRingsAligned}/${mineralRingTops.join(',')}, targets=${proteinFormulaVisible}/${lowCarbSodiumVisible}, activityRings=${activityAffectsRings}/${activityImpactSummaryVisible}, catalog=${catalogSourceVisible}/${catalogAutofillWorks}, recalculation=${mealRecalculationAvailable}/${mealRecalculationConsentGuard}, threeMealsSaved=${threeMealsSaved}, centered=${nutritionCanvasCentered}, yesterdayDelete=${yesterdayMealsReady}/${yesterdayMealsRemainInteractive}, torionDefaultVisible=${torionDefaultVisible}, activityTipsVisible=${activityTipsVisible}, activityStartsNow=${activityStartsNow}, activityEditSaved=${activityEditSaved}, quickActivitySaved=${quickActivitySaved}, stepsTransferredToToday=${stepsTransferredToToday}`);
   }
   console.log(JSON.stringify({
     status: response.status(), failures, nutritionVisible, nutritionPixels, practiceVisible, practicePixels,
     momentCheckInSaved, daySummarySaved, mineralRingTops, mineralRingsAligned, proteinFormulaVisible, lowCarbSodiumVisible, catalogSourceVisible, catalogAutofillWorks, manualMealSaved, mealRecalculationAvailable, mealRecalculationConsentGuard, repeatedMealSaved, threeMealsSaved,
-    nutritionCanvasMetrics, nutritionCanvasCentered, yesterdayMealsReady, yesterdayMealsRemainInteractive, torionDefaultVisible, activityTipsVisible, activityStartsNow, activityEditSaved, quickActivitySaved, stepsTransferredToToday, audioVisible, practiceSaved, pulseMeasured, explainableInsightsVisible,
+    nutritionCanvasMetrics, nutritionCanvasCentered, yesterdayMealsReady, yesterdayMealsRemainInteractive, torionDefaultVisible, activityTipsVisible, activityStartsNow, activityAffectsRings, activityImpactSummaryVisible, activityEditSaved, quickActivitySaved, stepsTransferredToToday, audioVisible, practiceSaved, pulseMeasured, explainableInsightsVisible,
   }, null, 2));
   await browser.close();
   browser = null;

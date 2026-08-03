@@ -21,6 +21,7 @@ import { formatHour, hourToAngle, mealType } from '../../src/domain/nutrition/rh
 import {
   ACTIVITY_MET,
   dailyActivityExpenditure,
+  estimateActivityNutritionImpact,
   estimateActivityCalories,
   estimateStepCalories,
   findFreeActivityStart,
@@ -190,6 +191,37 @@ test('пересекающиеся активности не задваиваю�
     { startMin: 630, durationMin: 60, kcal: 180 },
   ]);
   assert.equal(expenditure, 390);
+});
+
+test('активность даёт оценку расхода КБЖУ и потерь электролитов, но не клетчатки', () => {
+  const impact = estimateActivityNutritionImpact([
+    { type: 'run', startMin: 600, durationMin: 60, intensity: 'high' },
+  ], { weightKg: 70 });
+  assert.ok(impact.energyKcal > 500);
+  assert.ok(impact.proteinG > 0);
+  assert.ok(impact.carbG > impact.fatG);
+  assert.equal(impact.fiberG, 0);
+  assert.ok(impact.sodiumMg > 0 && impact.potassiumMg > 0 && impact.magnesiumMg > 0);
+});
+
+test('низкоуглеводный режим смещает модель топлива от углеводов к жирам', () => {
+  const activity = [{ type: 'cycling', startMin: 600, durationMin: 60, intensity: 'moderate' }];
+  const regular = estimateActivityNutritionImpact(activity, { weightKg: 70, lowCarb: false });
+  const lowCarb = estimateActivityNutritionImpact(activity, { weightKg: 70, lowCarb: true });
+  assert.ok(lowCarb.carbG < regular.carbG);
+  assert.ok(lowCarb.fatG > regular.fatG);
+  assert.equal(lowCarb.energyKcal, regular.energyKcal);
+});
+
+test('дневные шаги не складываются второй раз с ручной ходьбой', () => {
+  const stepsOnly = estimateActivityNutritionImpact([
+    { type: 'walk_brisk', startMin: 600, durationMin: 60, intensity: 'moderate', dailySteps: true, steps: 8000, kcal: 240 },
+  ], { weightKg: 70 });
+  const withDuplicateWalk = estimateActivityNutritionImpact([
+    { type: 'walk_brisk', startMin: 600, durationMin: 60, intensity: 'moderate', dailySteps: true, steps: 8000, kcal: 240 },
+    { type: 'walk_brisk', startMin: 800, durationMin: 30, intensity: 'moderate' },
+  ], { weightKg: 70 });
+  assert.equal(withDuplicateWalk.energyKcal, stepsOnly.energyKcal);
 });
 
 test('лёгкая активность рядом с приёмом сокращает окно переваривания', () => {

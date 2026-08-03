@@ -50,3 +50,25 @@ test('минеральные ориентиры взрослых зависят 
   assert.equal(female.magnesium, 320);
   assert.equal(male.magnesium, 420);
 });
+
+test('расход активности увеличивает ориентиры колец без вычитания съеденного', () => {
+  const base = computeNutritionTargets({
+    profile: { height: 180, age: 40, sex: 'm' }, weightKg: 90, waistCm: 90,
+  });
+  const active = computeNutritionTargets({
+    profile: { height: 180, age: 40, sex: 'm' }, weightKg: 90, waistCm: 90,
+    activityImpact: {
+      energyKcal: 400, proteinG: 5, fatG: 12, carbG: 40,
+      sodiumMg: 300, potassiumMg: 120, magnesiumMg: 8, sweatLitres: 0.6,
+      model: 'activity-fuel-sweat-v1',
+    },
+  });
+  assert.equal(active.kcal, base.kcal + 400);
+  assert.equal(active.protein, base.protein + 5);
+  assert.equal(active.fat, base.fat + 12);
+  assert.equal(active.carb, base.carb + 40);
+  assert.ok(active.fiber > base.fiber, 'клетчатка не расходуется, но ориентир растёт вместе с энергией');
+  assert.equal(active.sodium, base.sodium + 300);
+  assert.equal(active.potassium, base.potassium + 120);
+  assert.equal(active.magnesium, base.magnesium + 8);
+});

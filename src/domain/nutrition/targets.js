@@ -40,7 +40,7 @@ export function estimateReferenceMass({ weightKg, heightCm, waistCm, sex } = {})
 
 export function computeNutritionTargets({
   profile = {}, weightKg, waistCm, lowCarb = false, lowCarbWeek = 1,
-  previousActivityKcal = 0,
+  activityImpact = {},
 } = {}) {
   const sex = profile?.sex === 'm' ? 'm' : profile?.sex === 'f' ? 'f' : null;
   const age = clamp(finite(profile?.age) || 34, 18, 100);
@@ -54,25 +54,49 @@ export function computeNutritionTargets({
   else if (weight > 0 && heightCm > 0 && sex) {
     basalKcal = 10 * weight + 6.25 * heightCm - 5 * age + (sex === 'm' ? 5 : -161);
   }
-  const activityKcal = clamp(finite(previousActivityKcal) || 0, 0, 1200);
-  const kcal = basalKcal
-    ? clamp(roundTo(basalKcal * 1.2 + activityKcal, 50), 1200, 4500)
+  const baseKcal = basalKcal
+    ? clamp(roundTo(basalKcal * 1.2, 50), 1200, 4500)
     : 2200;
 
-  const protein = referenceKg ? clamp(Math.round(referenceKg * 1.6), 50, 260) : 60;
+  const baseProtein = referenceKg ? clamp(Math.round(referenceKg * 1.6), 50, 260) : 60;
   const week = clamp(Math.round(finite(lowCarbWeek) || 1), 1, 8);
-  const carb = lowCarb
+  const baseCarb = lowCarb
     ? Math.round(60 - (week - 1) * 2)
     : referenceKg ? clamp(Math.round(referenceKg * 3), 130, 320) : 200;
   const baseFat = referenceKg ? clamp(Math.round(referenceKg), 40, 140) : 70;
   const lowCarbFat = referenceKg
-    ? clamp(Math.round((kcal - protein * 4 - carb * 4) / 9), Math.round(referenceKg * 0.8), Math.round(referenceKg * 2))
+    ? clamp(Math.round((baseKcal - baseProtein * 4 - baseCarb * 4) / 9), Math.round(referenceKg * 0.8), Math.round(referenceKg * 2))
     : 100;
-  const fat = lowCarb ? lowCarbFat : baseFat;
-  const fiber = clamp(Math.round(kcal * 14 / 1000), 25, 50);
-  const sodium = lowCarb ? 2300 : 2000;
-  const potassium = sex === 'm' ? 3400 : sex === 'f' ? 2600 : 3500;
-  const magnesium = sex === 'm' ? (age > 30 ? 420 : 400) : (age > 30 ? 320 : 310);
+  const baseTargets = {
+    kcal: baseKcal,
+    protein: baseProtein,
+    fat: lowCarb ? lowCarbFat : baseFat,
+    carb: baseCarb,
+    fiber: clamp(Math.round(baseKcal * 14 / 1000), 25, 50),
+    sodium: lowCarb ? 2300 : 2000,
+    potassium: sex === 'm' ? 3400 : sex === 'f' ? 2600 : 3500,
+    magnesium: sex === 'm' ? (age > 30 ? 420 : 400) : (age > 30 ? 320 : 310),
+  };
+  const impact = {
+    energyKcal: clamp(finite(activityImpact.energyKcal) || 0, 0, 5000),
+    proteinG: clamp(finite(activityImpact.proteinG) || 0, 0, 100),
+    fatG: clamp(finite(activityImpact.fatG) || 0, 0, 300),
+    carbG: clamp(finite(activityImpact.carbG) || 0, 0, 500),
+    sodiumMg: clamp(finite(activityImpact.sodiumMg) || 0, 0, 1500),
+    potassiumMg: clamp(finite(activityImpact.potassiumMg) || 0, 0, 600),
+    magnesiumMg: clamp(finite(activityImpact.magnesiumMg) || 0, 0, 50),
+    sweatLitres: clamp(finite(activityImpact.sweatLitres) || 0, 0, 5),
+    model: activityImpact.model || null,
+  };
+  const kcal = Math.round(baseTargets.kcal + impact.energyKcal);
+  const protein = Math.round((baseTargets.protein + impact.proteinG) * 10) / 10;
+  const fat = Math.round((baseTargets.fat + impact.fatG) * 10) / 10;
+  const carb = Math.round((baseTargets.carb + impact.carbG) * 10) / 10;
+  const fiber = clamp(Math.round(kcal * 14 / 1000), 25, 70);
+  const sodium = Math.round(baseTargets.sodium + impact.sodiumMg);
+  const potassium = Math.round(baseTargets.potassium + impact.potassiumMg);
+  const magnesium = Math.round(baseTargets.magnesium + impact.magnesiumMg);
+  impact.fiberG = Math.max(0, fiber - baseTargets.fiber);
 
   const perReferenceKg = (value) => referenceKg ? Math.round(value / referenceKg * 100) / 100 : null;
   return {
@@ -83,6 +107,8 @@ export function computeNutritionTargets({
       bodyFatPercent: reference.bodyFatPercent,
       lowCarb,
       lowCarbWeek: week,
+      baseTargets,
+      activityImpact: impact,
       rates: {
         kcalPerKg: perReferenceKg(kcal),
         proteinGPerKg: perReferenceKg(protein),
