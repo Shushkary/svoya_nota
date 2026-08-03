@@ -229,14 +229,14 @@ const ACTIVITY_TIPS = {
 // Вместо сока лимона — криопорошок цельного лимона (ИК-сушка + криопомол).
 // КБЖУ приблизительное: калорийность даёт в основном инулин (ферментируемая
 // клетчатка, ~2 ккал/г); белков, жиров и сахара нет. Минералы — по этикетке.
-const TORION = {
+const TORION = Object.freeze({
   name: 'Торион · Mineral Matrix',
   kcal: 6, proteinG: 0, fatG: 0, carbG: 0.3, fiberG: 2.7,
   sodiumMg: 500, potassiumMg: 608, magnesiumMg: 200,
-};
+});
 
-// Пресет как «черновик»: те же действия, что у записей вчера (правка → в сегодня,
-// повтор, удаление). entry нужен для repeatMeal/editDraft без реальной записи в журнале.
+// Постоянный пресет: его можно добавить или повторить с другой порцией, но нельзя
+// скрыть из блока. entry нужен для repeatMeal без реальной записи в журнале.
 const torionMeal = {
   name: TORION.name,
   kcal: TORION.kcal, p: TORION.proteinG, f: TORION.fatG, c: TORION.carbG, fiber: TORION.fiberG,
@@ -250,10 +250,6 @@ const torionMeal = {
     confidence: null, source: 'draft_torion', deleted: false,
   } },
 };
-
-// Скрытие пресета «Торион» — только на устройстве (не синхронизируется).
-const TORION_HIDDEN_KEY = 'nota.torion.v2';
-const loadTorionHidden = () => { try { return !!JSON.parse(localStorage.getItem(TORION_HIDDEN_KEY) || '{}').hidden; } catch { return false; } };
 
 function MealForm({ value, onChange, onSave, onClose, onRecalculate, onCatalogAdd, onCatalogRemove, title, busy, notice }) {
   const provenanceKey = { kcal: 'kcal', proteinG: 'protein_g', fatG: 'fat_g', carbG: 'carbs_g', fiberG: 'fiber_g', sodiumMg: 'sodium_mg', potassiumMg: 'potassium_mg', magnesiumMg: 'magnesium_mg' };
@@ -309,9 +305,7 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
   const [formNotice, setFormNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [barcodeOpen, setBarcodeOpen] = useState(false);
-  const [torionHidden, setTorionHidden] = useState(loadTorionHidden);
   const [torionInfo, setTorionInfo] = useState(false);
-  const hideTorion = () => { try { localStorage.setItem(TORION_HIDDEN_KEY, JSON.stringify({ hidden: true })); } catch { /* private mode */ } setTorionHidden(true); };
   const [barcode, setBarcode] = useState('');
   const [barcodeInfo, setBarcodeInfo] = useState(null);
   const [barcodeMiss, setBarcodeMiss] = useState(false);
@@ -819,31 +813,26 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
               <section className="n-panel">
                 <p className="n-panel-label">вчерашние приёмы · добавить в сегодня</p>
                 <div className="n-meal-list">
-                  {draftMeals.length === 0 && torionHidden
-                    ? <span className="n-empty">Вчера блюд не было — здесь появятся варианты для повтора после 24:00.</span>
-                    : draftMeals.map((meal) => (
-                      <div className="n-meal-row" key={meal.id}>
-                        <span>{formatHour(meal.hour)} · {mealType(meal.hour)} · <b>{meal.name}</b> · {Math.round(meal.kcal)} ккал{hasMinerals(meal) ? ` · Na ${Math.round(meal.sodium)}/K ${Math.round(meal.potassium)}/Mg ${Math.round(meal.magnesium)} мг` : ''}</span>
-                        <span className="n-row-actions">
-                          <button title="Поправить и добавить в сегодня" onClick={() => editDraft(meal)}>{copiedFromYesterday.has(meal.entry.clientId) ? 'Добавить ещё' : 'Добавить с правкой'}</button>
-                          <button title="Повторить с другой порцией" onClick={() => openRepeat(meal)}>↻</button>
-                          <button title="Удалить из вчерашних приёмов" onClick={() => setDeleteYesterdayTarget(meal)}>×</button>
-                        </span>
-                      </div>
-                    ))}
-                  {!torionHidden && (
-                    <div className="n-meal-row">
-                      <span onClick={() => setTorionInfo(true)} style={{ flex: 1, cursor: 'pointer' }}>
-                        <b>{TORION.name}</b> · {TORION.kcal} ккал
-                        {hasMinerals(torionMeal) ? ` · Na ${TORION.sodiumMg}/K ${TORION.potassiumMg}/Mg ${TORION.magnesiumMg} мг` : ''}
-                      </span>
+                  {draftMeals.map((meal) => (
+                    <div className="n-meal-row" key={meal.id}>
+                      <span>{formatHour(meal.hour)} · {mealType(meal.hour)} · <b>{meal.name}</b> · {Math.round(meal.kcal)} ккал{hasMinerals(meal) ? ` · Na ${Math.round(meal.sodium)}/K ${Math.round(meal.potassium)}/Mg ${Math.round(meal.magnesium)} мг` : ''}</span>
                       <span className="n-row-actions">
-                        <button title="Добавить в сегодня" onClick={addTorion}>Добавить</button>
-                        <button title="Повторить с другой порцией" onClick={() => openRepeat(torionMeal)}>↻</button>
-                        <button title="Удалить" onClick={hideTorion}>×</button>
+                        <button title="Поправить и добавить в сегодня" onClick={() => editDraft(meal)}>{copiedFromYesterday.has(meal.entry.clientId) ? 'Добавить ещё' : 'Добавить с правкой'}</button>
+                        <button title="Повторить с другой порцией" onClick={() => openRepeat(meal)}>↻</button>
+                        <button title="Удалить из вчерашних приёмов" onClick={() => setDeleteYesterdayTarget(meal)}>×</button>
                       </span>
                     </div>
-                  )}
+                  ))}
+                  <div className="n-meal-row" data-fixed-preset="torion-mineral-matrix">
+                    <span onClick={() => setTorionInfo(true)} style={{ flex: 1, cursor: 'pointer' }}>
+                      <b>{TORION.name}</b> · {TORION.kcal} ккал
+                      {hasMinerals(torionMeal) ? ` · Na ${TORION.sodiumMg}/K ${TORION.potassiumMg}/Mg ${TORION.magnesiumMg} мг` : ''}
+                    </span>
+                    <span className="n-row-actions">
+                      <button title="Добавить в сегодня" onClick={addTorion}>Добавить</button>
+                      <button title="Повторить с другой порцией" onClick={() => openRepeat(torionMeal)}>↻</button>
+                    </span>
+                  </div>
                 </div>
               </section>
 

@@ -13,11 +13,15 @@ export const PHONE_STEPS_KEY = 'nota.phone-steps.v1';
 // src/nutrition/widget.html (отдельный документ в iframe, импорт модулей туда
 // не доходит) — менять только вместе.
 export const NUTRITION_WIDGET_KEY = 'nota.nutrition.v1';
-// Настройки самочувствия и скрытая карточка Торион — устройство, не журнал.
+// Настройки самочувствия — устройство, не журнал.
 export const PREFS_KEY = 'nota.prefs.v1';
-export const TORION_HIDDEN_KEY = 'nota.torion.v1';
 // Метка источника перехода (реферал) — техническая, без личных данных.
 export const REFERRAL_KEY = 'nota_ref';
 // Ключи прежнего виджета тороида, оставшиеся у ранних пользователей.
 // Нужны только для того, чтобы «Удалить все данные» вычистило и их.
-export const LEGACY_KEYS = Object.freeze(['t_history', 't_bio', 't_theme']);
+export const LEGACY_KEYS = Object.freeze([
+  't_history', 't_bio', 't_theme',
+  // Старые флаги скрытия пресета Торион больше не используются, но удаляются
+  // вместе с остальными данными пользователя.
+  'nota.torion.v1', 'nota.torion.v2',
+]);

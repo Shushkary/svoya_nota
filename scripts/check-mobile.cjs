@@ -33,7 +33,11 @@ let browser;
   await page.getByRole('button', { name: /Тело/i }).click();
   await page.waitForTimeout(400);
   const canvas = page.locator('.nutrition-stage canvas.torus-canvas');
-  const torionDefaultVisible = await page.getByText(/Торион · Mineral Matrix/).first().isVisible();
+  const torionPresetRow = page.locator('[data-fixed-preset="torion-mineral-matrix"]');
+  const torionDefaultVisible = await torionPresetRow.isVisible();
+  const torionFixedValues = (await torionPresetRow.innerText()).replace(/\s+/g, ' ').includes(
+    'Торион · Mineral Matrix · 6 ккал · Na 500/K 608/Mg 200 мг',
+  ) && await torionPresetRow.getByTitle('Удалить').count() === 0;
   const nutritionVisible = await canvas.isVisible();
   const nutritionPixels = nutritionVisible
     ? await canvas.evaluate((node) => {
@@ -214,13 +218,13 @@ let browser;
   await desktopPage.screenshot({ path: 'C:/tmp/nota-desktop-practice-full.png', fullPage: true });
   await desktop.close();
   if (failures.length) throw new Error(failures.join('\n'));
-  if (!mineralRingsAligned || !proteinFormulaVisible || !lowCarbSodiumVisible || !activityAffectsRings || !activityImpactSummaryVisible || !catalogSourceVisible || !catalogAutofillWorks || !mealRecalculationAvailable || !mealRecalculationConsentGuard || !threeMealsSaved || !nutritionCanvasCentered || !yesterdayMealsReady || !yesterdayMealsRemainInteractive || !torionDefaultVisible || !activityTipsVisible || !activityStartsNow || !activityEditSaved || !quickActivitySaved || !stepsTransferredToToday) {
-    throw new Error(`nutrition regression: rings=${mineralRingsAligned}/${mineralRingTops.join(',')}, targets=${proteinFormulaVisible}/${lowCarbSodiumVisible}, activityRings=${activityAffectsRings}/${activityImpactSummaryVisible}, catalog=${catalogSourceVisible}/${catalogAutofillWorks}, recalculation=${mealRecalculationAvailable}/${mealRecalculationConsentGuard}, threeMealsSaved=${threeMealsSaved}, centered=${nutritionCanvasCentered}, yesterdayDelete=${yesterdayMealsReady}/${yesterdayMealsRemainInteractive}, torionDefaultVisible=${torionDefaultVisible}, activityTipsVisible=${activityTipsVisible}, activityStartsNow=${activityStartsNow}, activityEditSaved=${activityEditSaved}, quickActivitySaved=${quickActivitySaved}, stepsTransferredToToday=${stepsTransferredToToday}`);
+  if (!mineralRingsAligned || !proteinFormulaVisible || !lowCarbSodiumVisible || !activityAffectsRings || !activityImpactSummaryVisible || !catalogSourceVisible || !catalogAutofillWorks || !mealRecalculationAvailable || !mealRecalculationConsentGuard || !threeMealsSaved || !nutritionCanvasCentered || !yesterdayMealsReady || !yesterdayMealsRemainInteractive || !torionDefaultVisible || !torionFixedValues || !activityTipsVisible || !activityStartsNow || !activityEditSaved || !quickActivitySaved || !stepsTransferredToToday) {
+    throw new Error(`nutrition regression: rings=${mineralRingsAligned}/${mineralRingTops.join(',')}, targets=${proteinFormulaVisible}/${lowCarbSodiumVisible}, activityRings=${activityAffectsRings}/${activityImpactSummaryVisible}, catalog=${catalogSourceVisible}/${catalogAutofillWorks}, recalculation=${mealRecalculationAvailable}/${mealRecalculationConsentGuard}, threeMealsSaved=${threeMealsSaved}, centered=${nutritionCanvasCentered}, yesterdayDelete=${yesterdayMealsReady}/${yesterdayMealsRemainInteractive}, torion=${torionDefaultVisible}/${torionFixedValues}, activityTipsVisible=${activityTipsVisible}, activityStartsNow=${activityStartsNow}, activityEditSaved=${activityEditSaved}, quickActivitySaved=${quickActivitySaved}, stepsTransferredToToday=${stepsTransferredToToday}`);
   }
   console.log(JSON.stringify({
     status: response.status(), failures, nutritionVisible, nutritionPixels, practiceVisible, practicePixels,
     momentCheckInSaved, daySummarySaved, mineralRingTops, mineralRingsAligned, proteinFormulaVisible, lowCarbSodiumVisible, catalogSourceVisible, catalogAutofillWorks, manualMealSaved, mealRecalculationAvailable, mealRecalculationConsentGuard, repeatedMealSaved, threeMealsSaved,
-    nutritionCanvasMetrics, nutritionCanvasCentered, yesterdayMealsReady, yesterdayMealsRemainInteractive, torionDefaultVisible, activityTipsVisible, activityStartsNow, activityAffectsRings, activityImpactSummaryVisible, activityEditSaved, quickActivitySaved, stepsTransferredToToday, audioVisible, practiceSaved, pulseMeasured, explainableInsightsVisible,
+    nutritionCanvasMetrics, nutritionCanvasCentered, yesterdayMealsReady, yesterdayMealsRemainInteractive, torionDefaultVisible, torionFixedValues, activityTipsVisible, activityStartsNow, activityAffectsRings, activityImpactSummaryVisible, activityEditSaved, quickActivitySaved, stepsTransferredToToday, audioVisible, practiceSaved, pulseMeasured, explainableInsightsVisible,
   }, null, 2));
   await browser.close();
   browser = null;
