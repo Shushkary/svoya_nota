@@ -15,7 +15,10 @@ import { Card, Sheet } from '../components.jsx';
 import ToroidCanvas from '../ToroidCanvas.jsx';
 import WellnessPrefs from '../WellnessPrefs.jsx';
 import FoodCatalogPicker from '../FoodCatalogPicker.jsx';
-import { sumFoodComponents } from '../../domain/nutrition/foodCatalog.js';
+import { foodComponent, searchFoods, sumFoodComponents } from '../../domain/nutrition/foodCatalog.js';
+import foodsBundle from '../../data/foods-core.json';
+
+const OFFLINE_FOODS = Array.isArray(foodsBundle) ? foodsBundle : foodsBundle.foods || [];
 
 const emptyForm = () => ({
   name: '', time: new Date().toTimeString().slice(0, 5), kcal: '', proteinG: '', fatG: '', carbG: '', fiberG: '', sodiumMg: '', potassiumMg: '', magnesiumMg: '',
@@ -505,6 +508,29 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
     setFormNotice('');
   };
 
+  // Офлайн-совпадения по описанию — работают без сети и без ИИ. Показываем их
+  // раньше сетевой оценки: точное совпадение из таблиц не требует ни токена,
+  // ни согласия на ИИ, ни интернета вообще.
+  const offlineMatches = useMemo(
+    () => (description.trim().length >= 2 ? searchFoods(OFFLINE_FOODS, description, 4) : []),
+    [description],
+  );
+
+  const addOfflineMatch = (food) => {
+    const component = foodComponent(food, 100);
+    const totals = sumFoodComponents([component]);
+    const provenance = Object.fromEntries(Object.entries(component.provenance || {}).map(([nutrient, source]) => [nutrient, [source]]));
+    setEditing(null);
+    setFormNotice('');
+    setForm({
+      ...emptyForm(), time: formatHour(mealMinute / 60), name: component.foodName,
+      kcal: totals.kcal, proteinG: totals.proteinG, fatG: totals.fatG, carbG: totals.carbG, fiberG: totals.fiberG,
+      sodiumMg: totals.sodiumMg, potassiumMg: totals.potassiumMg, magnesiumMg: totals.magnesiumMg,
+      source: 'food_catalog', components: [component], nutritionProvenance: provenance,
+    });
+    setNotice('Взято из офлайн-таблицы — без сети и без ИИ. Порцию можно поправить в форме.');
+  };
+
   const estimateDescription = async () => {
     if (!description.trim()) return;
     if (!token || !aiConsent) { setNotice('Для ИИ-оценки включите согласие и синхронизацию в разделе «Ещё».'); return; }
@@ -828,7 +854,19 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
 
                 <div className="meal-text-entry">
                   <textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Опишите блюдо и порцию: например, «яичница на топлёном масле с зеленью, 200 г»" rows="2" />
-                  <button className="n-action primary" disabled={busy || !description.trim()} onClick={estimateDescription}>{busy ? 'Оцениваю…' : 'Оценить по описанию'}</button>
+                  {offlineMatches.length > 0 && (
+                    <div className="offline-matches">
+                      <p className="tiny dim">Есть в офлайн-таблице · без сети и без ИИ:</p>
+                      <div className="n-chips">
+                        {offlineMatches.map((food) => (
+                          <button type="button" key={food.id} onClick={() => addOfflineMatch(food)}>
+                            {food.name_ru || food.name_en}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <button className="n-action primary" disabled={busy || !description.trim()} onClick={estimateDescription}>{busy ? 'Оцениваю…' : 'Оценить по описанию (нужна сеть)'}</button>
                 </div>
 
                 <p className="meal-or">или снимите</p>
