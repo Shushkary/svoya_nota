@@ -62,6 +62,56 @@ export function dailyActivityExpenditure(activities) {
   return Math.round(perMinute.reduce((sum, value) => sum + value, 0));
 }
 
+// Качество движения — самоотчёт рядом с интенсивностью. Метка честности:
+// непрерывность, а не калории, отличает ровную нагрузку от рывковой.
+export const CONTINUITY = Object.freeze(['ровное', 'переменное', 'рывками']);
+
+// Дней из N (по умолчанию 14) хотя бы с одним непрерывным движением ≥ 20 мин.
+// Плотность вместо серий: один пропуск не обнуляет счёт, важно число задетых дней.
+export function continuousMovementDays(activities = [], now = new Date(), days = 14) {
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() - days);
+  const pad = (n) => String(n).padStart(2, '0');
+  const dayKeys = new Set();
+  for (const entry of activities || []) {
+    const payload = (entry && entry.payload) || entry || {};
+    if (payload.deleted || payload.continuity !== 'ровное') continue;
+    if (!(Number(payload.durationMin) >= 20)) continue;
+    const at = new Date(entry.at || payload.date);
+    if (Number.isNaN(at.getTime()) || at < cutoff || at > now) continue;
+    dayKeys.add(payload.date || `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`);
+  }
+  return dayKeys.size;
+}
+
+// Тепловые события — смена температуры (баня, горячий душ, прохладная вода,
+// прогулка в холоде), не нагрузка. Факт и длительность, без калорий и пота:
+// это отдельная категория, не вклад в расход или потери минералов.
+export const HEAT_KINDS = Object.freeze([
+  { id: 'banya', label: 'баня', defaultMin: 20 },
+  { id: 'hot_shower', label: 'горячий душ', defaultMin: 10 },
+  { id: 'cold_water', label: 'прохладная вода', defaultMin: 3 },
+  { id: 'cold_walk', label: 'прогулка в холоде', defaultMin: 15 },
+]);
+const HEAT_TYPES = new Set(['heat', 'banya']);
+
+// Дней из N (по умолчанию 14) с намеренной сменой температуры. Только
+// наблюдение — приложение не утверждает пользу, лишь считает дни.
+export function heatExposureDays(activities = [], now = new Date(), days = 14) {
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() - days);
+  const pad = (n) => String(n).padStart(2, '0');
+  const dayKeys = new Set();
+  for (const entry of activities || []) {
+    const payload = (entry && entry.payload) || entry || {};
+    if (payload.deleted || !HEAT_TYPES.has(payload.type)) continue;
+    const at = new Date(entry.at || payload.date);
+    if (Number.isNaN(at.getTime()) || at < cutoff || at > now) continue;
+    dayKeys.add(payload.date || `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`);
+  }
+  return dayKeys.size;
+}
+
 const FUEL_BY_INTENSITY = Object.freeze({
   low: { protein: 0.05, carb: 0.30, fat: 0.65, sweatLph: 0.3 },
   moderate: { protein: 0.05, carb: 0.50, fat: 0.45, sweatLph: 0.6 },

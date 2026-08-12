@@ -10,6 +10,7 @@ import { parseTrackerCsv } from '../../infrastructure/trackerImport.js';
 import { loadPhoneSteps, savePhoneSteps } from '../../infrastructure/phoneSteps.js';
 import { estimateStepCalories } from '../../domain/nutrition/activity.js';
 import { isEveningBreathingWindow } from '../../domain/practice/reminders.js';
+import { isMorningWindow } from '../../domain/rhythm/day.js';
 import { DAY_NAMES, GENTLE, isoDay, planForDay, suggestGentle } from '../../domain/weekPlan.js';
 import { Card, Sheet, StateSliders } from '../components.jsx';
 
@@ -97,9 +98,15 @@ export default function Today({ journal, lists, addEntry, updateEntry, openPract
   const saltDone = lists.ritual.some((e) => (e.payload?.type === 'saltWater' || e.payload?.type === 'electrolytes') && dayKey(e.at) === today);
   const [steps, setSteps] = useState(() => String(initialPhoneSteps?.steps ?? stepsToday?.payload.steps ?? ''));
   const [sleep, setSleep] = useState(() => String(sleepToday?.payload.sleepHours ?? ''));
+  const [bedtime, setBedtime] = useState(() => {
+    const raw = Number(sleepToday?.payload.bedtimeHour);
+    if (!Number.isFinite(raw)) return '';
+    const h = Math.floor(raw) % 24;
+    const m = Math.round((raw % 1) * 60);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  });
   const [saltModal, setSaltModal] = useState(false);
-  const hour = now.getHours();
-  const saltReminder = hour < 12 && !saltDone;
+  const saltReminder = isMorningWindow(now) && !saltDone;
   const eveningBreathReminder = isEveningBreathingWindow(now);
   const markSalt = () => {
     addEntry('ritual', { type: 'electrolytes', done: true, date: today }, `${today}T08:00:00`);
@@ -227,11 +234,20 @@ export default function Today({ journal, lists, addEntry, updateEntry, openPract
               <input type="number" inputMode="decimal" placeholder="Сон, ч" value={sleep}
                 onChange={(e) => setSleep(e.target.value)} aria-label="Сон, часов" />
             </div>
+            <label className="fl" htmlFor="bedtime-input">Во сколько легли (необязательно)</label>
+            <input id="bedtime-input" type="time" value={bedtime}
+              onChange={(e) => setBedtime(e.target.value)} aria-label="Во сколько легли спать" />
+            <p className="tiny dim">
+              Не обязательно. По медиане за 14 дней приложение считает, во сколько обычно
+              заканчивается переваривание — вместо фиксированного часа для всех.
+            </p>
             <button className="btn ghost" onClick={() => {
               const s = Number(steps), h = Number(sleep);
-              if (!s && !h) return;
+              const [bh, bm] = bedtime.split(':').map(Number);
+              const bedtimeHour = Number.isFinite(bh) && Number.isFinite(bm) ? bh + bm / 60 : undefined;
+              if (!s && !h && bedtimeHour === undefined) return;
               const importedLocally = phoneSteps?.steps === s;
-              if (importedLocally && !h && !activityToday) {
+              if (importedLocally && !h && bedtimeHour === undefined && !activityToday) {
                 setTrackerStatus(`Шаги уже сохранены только на этом устройстве: ${s.toLocaleString('ru-RU')}.`);
                 return;
               }
@@ -240,6 +256,7 @@ export default function Today({ journal, lists, addEntry, updateEntry, openPract
                 date: today,
                 steps: !importedLocally && s > 0 && s < 200000 ? s : undefined,
                 sleepHours: h > 0 && h <= 16 ? h : undefined,
+                bedtimeHour: bedtimeHour >= 0 && bedtimeHour < 24 ? bedtimeHour : activityToday?.payload?.bedtimeHour,
                 // Дневной итог шагов — не таймлайн тренировки. Тороид
                 // преобразует его в отдельную условную метку без влияния на
                 // окно переваривания.

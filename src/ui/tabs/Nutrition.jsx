@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { errorText, api } from '../../infrastructure/api.js';
 import { prepareMealImage } from '../../infrastructure/image-processing.js';
-import { aggregateMeals, clampMealTimestamp, combinedDigestiveLoad, digestionActivityAt, digestionFinishesBy, estimateDigestionHours, effectiveDigestionHours, estimateProcessing, mealTimestamp, nutrientProgress, processingScore, scaleMealPayload } from '../../domain/nutrition/meal.js';
+import { aggregateMeals, clampMealTimestamp, combinedDigestiveLoad, digestionActivityAt, digestionFinishesBy, digestionMovementOverlapShare, estimateDigestionHours, effectiveDigestionHours, estimateProcessing, lastDigestionFinishHour, longestRestWindowMinutes, mealTimestamp, nutrientProgress, processingScore, scaleMealPayload } from '../../domain/nutrition/meal.js';
 import { computeNutritionTargets } from '../../domain/nutrition/targets.js';
-import { estimateActivityNutritionImpact, findFreeActivityStart } from '../../domain/nutrition/activity.js';
+import { CONTINUITY, continuousMovementDays, estimateActivityNutritionImpact, findFreeActivityStart, HEAT_KINDS, heatExposureDays } from '../../domain/nutrition/activity.js';
 import { formatHour, mealType, normalizeHour } from '../../domain/nutrition/rhythm.js';
+import { medianBedtimeHour } from '../../domain/rhythm/day.js';
 import { parseGs1, isValidGtin } from '../../domain/barcode.js';
 import { latestWeightKg } from '../../infrastructure/weight.js';
 import { latestWaistCm } from '../../infrastructure/bodyStorage.js';
@@ -318,6 +319,7 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
   const [molOpen, setMolOpen] = useState(false);
   const [actType, setActType] = useState('walk_brisk');
   const [actIntensity, setActIntensity] = useState('moderate');
+  const [actContinuity, setActContinuity] = useState('ровное');
   const [actDuration, setActDuration] = useState(30);
   const [actStartMinute, setActStartMinute] = useState(currentMealMinute);
   const [activityTimeTouched, setActivityTimeTouched] = useState(false);
@@ -349,6 +351,43 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
   const activities = useMemo(() => lists.activity
     .filter((entry) => !entry.payload?.deleted && localDay(entry.at) === today)
     .sort((left, right) => Number(left.payload?.startMin || 0) - Number(right.payload?.startMin || 0)), [lists.activity, today]);
+  // Собственный ритм вместо фиксированных 18:00 для всех: медиана времени
+  // отхода ко сну за 14 дней. Без данных — нейтральный час по умолчанию,
+  // никак не связанный с личным ритмом (честно помечен как дефолт ниже).
+  const personalCutoffHour = useMemo(
+    () => medianBedtimeHour(lists.activity, new Date(clock)) ?? 23,
+    [lists.activity, clock],
+  );
+
+  // Суточное кольцо: еда, движение и покой на одной оси времени вместо
+  // раздельных «сколько съел» / «сколько потратил». Ниже — только измеренное
+  // и явно помеченная оценка (разброс за 14 дней), без целей и норм.
+  const dayOverlapShare = useMemo(
+    () => digestionMovementOverlapShare(meals, timedActivities, new Date(clock)),
+    [meals, timedActivities, clock],
+  );
+  const longestRestHours = useMemo(() => {
+    if (!meals.length) return null;
+    return longestRestWindowMinutes(meals, timedActivities, new Date(clock)) / 60;
+  }, [meals, timedActivities, clock]);
+  const todayFinishHour = useMemo(
+    () => lastDigestionFinishHour(meals, timedActivities),
+    [meals, timedActivities],
+  );
+  const bedtimeGapHours = todayFinishHour !== null ? personalCutoffHour - todayFinishHour : null;
+  const finishHourSpread = useMemo(() => {
+    const days = Array.from({ length: 14 }, (_, index) => {
+      const day = new Date(clock);
+      day.setDate(day.getDate() - index);
+      return localDay(day);
+    });
+    const values = days.map((key) => {
+      const dayMeals = lists.meal.filter((entry) => !entry.payload?.deleted && localDay(entry.at) === key).map(entryMeal);
+      const dayActivities = lists.activity.filter((entry) => !entry.payload?.deleted && localDay(entry.at) === key);
+      return lastDigestionFinishHour(dayMeals, dayActivities);
+    }).filter((value) => value !== null);
+    return values.length >= 2 ? Math.max(...values) - Math.min(...values) : null;
+  }, [lists.meal, lists.activity, clock]);
   const total = useMemo(() => aggregateMeals(meals), [meals]);
   const noise = useMemo(() => combinedDigestiveLoad(meals, new Date(clock), activities), [meals, clock, activities]);
   const share = macroShare(total);
@@ -373,6 +412,14 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
     activityImpact,
   });
   const expenditure = activityImpact.energyKcal;
+  const continuousDays = useMemo(
+    () => continuousMovementDays(lists.activity, new Date(clock)),
+    [lists.activity, clock],
+  );
+  const heatDays = useMemo(
+    () => heatExposureDays(lists.activity, new Date(clock)),
+    [lists.activity, clock],
+  );
   const molIndex = (() => { const hour = new Date(clock).getHours() + new Date(clock).getMinutes() / 60; return hour >= 7 && hour < 13 ? 0 : hour >= 13 && hour < 19 ? 1 : hour >= 19 || hour < 1 ? 2 : 3; })();
   const molPhases = [
     ['Пробуждение ритма', '07:00–13:00', 'Внутренние часы встречают день: система CLOCK–BMAL1 помогает клеткам включать дневные программы. Организм бодро настраивается на свет, движение и регулярные приёмы пищи.'],
@@ -405,14 +452,25 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
       // дуга переваривания — как в эталоне: (digestionH / 24) * TAU, без обрезки
       span: Math.max(0.05, digestionH / 24 * Math.PI * 2),
       // Жёлтая сетка означает, что по текущему прогнозу переваривание
-      // завершится к 18:00. Активность уже учтена в effectiveDigestionHours.
-      late: !digestionFinishesBy(meal.hour, digestionH, 18),
+      // завершится к обычному часу отхода ко сну (медиана за 14 дней; без
+      // данных — нейтральный час по умолчанию). Активность уже учтена в
+      // effectiveDigestionHours.
+      late: !digestionFinishesBy(meal.hour, digestionH, personalCutoffHour),
       level, load: level, isActivity: false,
       fuel: Math.max(0, Math.min(1, (meal.c || 0) / ((meal.c || 0) + (meal.f || 0) + 1))),
       color: index % 2 ? '#B0685C' : '#4E8070',
       digestionH, frac,
     };
-  }), ...visualActivities.map((entry) => ({ start: number(entry.payload?.startMin, 1440) / 1440 * Math.PI * 2, span: number(entry.payload?.durationMin, 1440) / 1440 * Math.PI * 2, level: .45, load: .45, isActivity: true, color: '#4A7C7E' }))];
+  }), ...visualActivities.map((entry) => {
+    // Дневной итог шагов не несёт достоверного часа — на кольце он должен
+    // читаться как полоса на все сутки, а не как блок в конкретном часе.
+    const estimatedTiming = !!entry.payload?.estimatedTiming;
+    return {
+      start: estimatedTiming ? 0 : number(entry.payload?.startMin, 1440) / 1440 * Math.PI * 2,
+      span: estimatedTiming ? Math.PI * 2 : number(entry.payload?.durationMin, 1440) / 1440 * Math.PI * 2,
+      level: .45, load: .45, isActivity: true, color: '#4A7C7E', estimatedTiming,
+    };
+  })];
 
   const save = () => {
     if (!form?.name.trim()) return;
@@ -518,7 +576,7 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
     }
   };
 
-  const storeActivity = ({ type = actType, intensity = actIntensity, durationMin = actDuration, requestedStartMin = actStartMinute, source = 'manual', kcal: suppliedKcal, steps, dailySteps = false, replaceEditing = true }) => {
+  const storeActivity = ({ type = actType, intensity = actIntensity, continuity = actContinuity, durationMin = actDuration, requestedStartMin = actStartMinute, source = 'manual', kcal: suppliedKcal, steps, dailySteps = false, replaceEditing = true }) => {
     const target = replaceEditing ? editingActivity : null;
     const safeType = ACTIVITY[type] ? type : 'walk_brisk';
     const occupied = activities.filter((entry) => entry.clientId !== target?.clientId).map((entry) => entry.payload || {});
@@ -527,7 +585,7 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
       { type: safeType, startMin, durationMin, intensity },
     ], { weightKg: weightKg || 70, lowCarb }).energyKcal;
     const at = new Date(); at.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
-    const payload = { type: safeType, label: ACTIVITY[safeType][0], intensity, durationMin, startMin, kcal, steps, dailySteps, date: today, source, deleted: false };
+    const payload = { type: safeType, label: ACTIVITY[safeType][0], intensity, continuity, durationMin, startMin, kcal, steps, dailySteps, date: today, source, deleted: false };
     if (target) updateEntry('activity', target.clientId, payload);
     else addEntry('activity', payload, at.toISOString());
     resetActivityForm();
@@ -535,6 +593,16 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
   };
 
   const addActivity = () => storeActivity({});
+
+  // Тепло — смена состояния, не нагрузка: факт и длительность, без калорий и пота.
+  const addHeatEvent = (kindId) => {
+    const kind = HEAT_KINDS.find((k) => k.id === kindId) || HEAT_KINDS[0];
+    addEntry('activity', {
+      type: 'heat', kind: kind.id, label: kind.label,
+      durationMin: kind.defaultMin, date: today, source: 'manual', deleted: false,
+    }, new Date().toISOString());
+    setNotice(`Отмечено: ${kind.label}.`);
+  };
 
   const saveActualSteps = () => {
     const steps = Math.round(Number(actualSteps));
@@ -839,6 +907,7 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
               <section className="n-panel">
                 <p className="n-panel-label">активность и расход</p>
                 <div className="n-two"><label>тип<select value={actType} onChange={(event) => setActType(event.target.value)}>{Object.entries(ACTIVITY).map(([key, item]) => <option value={key} key={key}>{item[0]}</option>)}</select></label><div><span>интенсивность</span><div className="n-chips">{['low', 'moderate', 'high'].map((value) => <button className={actIntensity === value ? 'on' : ''} key={value} onClick={() => setActIntensity(value)}>{value === 'low' ? 'низкая' : value === 'moderate' ? 'умеренная' : 'высокая'}</button>)}</div></div></div>
+                <div><span>непрерывность</span><div className="n-chips">{CONTINUITY.map((value) => <button className={actContinuity === value ? 'on' : ''} key={value} onClick={() => setActContinuity(value)}>{value}</button>)}</div><small>ровное движение ≥20 мин считается в отдельную отметку ниже — не калории</small></div>
                 <div className="n-control"><div><span>длительность</span><b>{actDuration} мин</b></div><input type="range" min="5" max="120" step="5" value={actDuration} onChange={(event) => setActDuration(Number(event.target.value))} /></div>
                 <div className="n-control"><div><span>время начала</span><b>{formatHour(actStartMinute / 60)}</b></div><input type="range" min="0" max="1439" step="1" value={actStartMinute} onChange={(event) => { setActivityTimeTouched(true); setActStartMinute(Number(event.target.value)); }} /><small>{editingActivity ? 'можно точно изменить время сохранённой активности' : 'по умолчанию — текущее время'}</small></div>
                 <button className="n-action" onClick={addActivity}>{editingActivity ? 'Сохранить активность' : 'Добавить активность вручную'}</button>
@@ -849,8 +918,24 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
                 </div>
                 <div className="n-chips"><button onClick={addTrackerRun}>трекер: пробежка 30 мин</button></div>
                 <button className="n-action" onClick={() => setActivityTips(true)}>Рекомендации по активности и питанию</button>
-                <div className="n-meal-list">{visualActivities.length === 0 ? <span className="n-empty">активностей пока нет</span> : <>{stepVisualActivity && <div className="n-meal-row" key="daily-steps"><span><b>{stepVisualActivity.label}</b> · дневной итог · {stepVisualActivity.kcal} ккал · оценка</span></div>}{timedActivities.map((entry) => <div className="n-meal-row" key={entry.clientId}><span>{formatHour(number(entry.payload.startMin) / 60)}–{formatHour((number(entry.payload.startMin) + number(entry.payload.durationMin, 1440)) / 60)} · <b>{entry.payload.label}</b> · {entry.payload.durationMin} мин · {entry.payload.kcal} ккал</span><span className="n-row-actions"><button title="Поправить" onClick={() => { setEditingActivity(entry); setActType(ACTIVITY[entry.payload.type] ? entry.payload.type : 'walk_brisk'); setActIntensity(entry.payload.intensity || 'moderate'); setActDuration(number(entry.payload.durationMin, 1440)); setActStartMinute(number(entry.payload.startMin, 1439)); setActivityTimeTouched(true); }}>Поправить</button><button title="Удалить" onClick={() => updateEntry('activity', entry.clientId, { ...entry.payload, deleted: true })}>×</button></span></div>)}</>}</div>
+                <div className="n-meal-list">{visualActivities.length === 0 ? <span className="n-empty">активностей пока нет</span> : <>{stepVisualActivity && <div className="n-meal-row" key="daily-steps"><span><b>{stepVisualActivity.label}</b> · дневной итог · {stepVisualActivity.kcal} ккал · оценка</span></div>}{timedActivities.map((entry) => <div className="n-meal-row" key={entry.clientId}><span>{formatHour(number(entry.payload.startMin) / 60)}–{formatHour((number(entry.payload.startMin) + number(entry.payload.durationMin, 1440)) / 60)} · <b>{entry.payload.label}</b> · {entry.payload.durationMin} мин · {entry.payload.kcal} ккал</span><span className="n-row-actions"><button title="Поправить" onClick={() => { setEditingActivity(entry); setActType(ACTIVITY[entry.payload.type] ? entry.payload.type : 'walk_brisk'); setActIntensity(entry.payload.intensity || 'moderate'); setActContinuity(CONTINUITY.includes(entry.payload.continuity) ? entry.payload.continuity : 'ровное'); setActDuration(number(entry.payload.durationMin, 1440)); setActStartMinute(number(entry.payload.startMin, 1439)); setActivityTimeTouched(true); }}>Поправить</button><button title="Удалить" onClick={() => updateEntry('activity', entry.clientId, { ...entry.payload, deleted: true })}>×</button></span></div>)}</>}</div>
                 <div className="n-kv"><span>расход за день</span><b>{Math.round(expenditure)} ккал · оценка</b></div><div className="n-kv"><span>записей активности</span><b>{visualActivities.length}</b></div>
+                <div className="n-kv"><span>дней из 14 с непрерывным движением ≥20 мин</span><b>{continuousDays}</b></div>
+              </section>
+
+              <section className="n-panel">
+                <p className="n-panel-label">тепло · смена состояния, не нагрузка</p>
+                <p className="dim small">
+                  Баня, горячий душ, прохладная вода, прогулка в холоде — факт и длительность,
+                  без калорий и без пота. Только наблюдение: связь со спарклайном самочувствия
+                  видна в «Динамике», если она вообще повторяется.
+                </p>
+                <div className="n-chips">
+                  {HEAT_KINDS.map((kind) => (
+                    <button key={kind.id} onClick={() => addHeatEvent(kind.id)}>{kind.label}</button>
+                  ))}
+                </div>
+                <div className="n-kv"><span>дней из 14 со сменой температуры</span><b>{heatDays}</b></div>
               </section>
 
               <section className="n-panel">
@@ -858,6 +943,25 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
                 <div className="n-kv"><span>приход за день</span><b>{Math.round(total.kcal)} ккал</b></div><div className="n-kv"><span>расход (активности)</span><b>{Math.round(expenditure)} ккал</b></div>
                 <div className="lowcarb"><p><span>плавный переход на низкоуглеводное</span><button className={lowCarb ? 'on' : ''} onClick={() => setLowCarb((value) => !value)}>{lowCarb ? 'вкл' : 'выкл'}</button></p>{lowCarb && <><div className="n-control"><div><span>неделя перехода</span><b>{lowCarbWeek} из 8</b></div><input type="range" min="1" max="8" value={lowCarbWeek} onChange={(event) => setLowCarbWeek(Number(event.target.value))} /></div><div className="n-kv"><span>ориентир углеводов</span><b>{targets.carb} г/день</b></div><div className="n-kv"><span>углеводы сегодня</span><b>{Math.round(total.c)} г</b></div></>}</div>
                 <button className="n-action ghost" onClick={() => { meals.forEach((meal) => updateEntry('meal', meal.entry.clientId, { ...meal.entry.payload, deleted: true })); activities.forEach((entry) => updateEntry('activity', entry.clientId, { ...entry.payload, deleted: true })); }}>Очистить день</button>
+              </section>
+
+              <section className="n-panel">
+                <p className="n-panel-label">сутки · еда, движение, покой</p>
+                <p className="dim small">
+                  Еда и движение встречаются здесь на одной оси времени, а не только
+                  в знаменателе колец. Ни у одного числа ниже нет цели или нормы.
+                </p>
+                <div className="n-kv"><span>доля суток с наложением еды и движения</span><b>{Math.round(dayOverlapShare * 100)}% · измерено</b></div>
+                <div className="n-kv"><span>самое длинное окно без переваривания</span><b>{longestRestHours !== null ? `${longestRestHours.toFixed(1)} ч · измерено` : '—'}</b></div>
+                <div className="n-kv"><span>час завершения последнего переваривания</span><b>{todayFinishHour !== null ? `${formatHour(todayFinishHour % 24)} · измерено` : '—'}</b></div>
+                {bedtimeGapHours !== null && (
+                  <p className="tiny dim">
+                    {bedtimeGapHours >= 0
+                      ? `Переваривание заканчивается примерно за ${bedtimeGapHours.toFixed(1)} ч до вашего обычного отбоя.`
+                      : `Переваривание по прогнозу продолжается ещё ${Math.abs(bedtimeGapHours).toFixed(1)} ч после вашего обычного отбоя.`}
+                  </p>
+                )}
+                <div className="n-kv"><span>разброс этого часа за 14 дней</span><b>{finishHourSpread !== null ? `${finishHourSpread.toFixed(1)} ч · оценка` : 'мало данных'}</b></div>
               </section>
 
               <section className="n-panel">

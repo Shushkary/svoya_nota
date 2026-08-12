@@ -12,12 +12,50 @@ import Toroid, { MiniToroid } from '../Toroid.jsx';
 import { loadPhoneStepsMap } from '../../infrastructure/phoneSteps.js';
 
 const LEGEND = [
-  ['nutrition', 'живот · питание'],
+  ['nutrition', 'низ · питание и действие'],
   ['feelings', 'грудь · чувства и тело'],
   ['mind', 'голова · мышление'],
-  ['will', 'контур · воля'],
   ['accord', 'ось · аккорд'],
 ];
+
+// Четыре режима расширения/собранности — без единого термина, только описание.
+const POLARITY_QUADRANTS = [
+  { expansion: true, gathering: false, label: 'разогнан, но не держит' },
+  { expansion: true, gathering: true, label: 'ясный день' },
+  { expansion: false, gathering: false, label: 'пусто' },
+  { expansion: false, gathering: true, label: 'собран, но глухо' },
+];
+
+function polarityQuadrant(expansion, gathering) {
+  if (expansion === null || gathering === null) return null;
+  const high = (value) => value >= 0.5;
+  return POLARITY_QUADRANTS.find((q) => q.expansion === high(expansion) && q.gathering === high(gathering)) || null;
+}
+
+function PolarityPoint({ expansion, gathering }) {
+  if (expansion === null || gathering === null) {
+    return <p className="tiny dim">Пока мало отметок состояния для этой картины.</p>;
+  }
+  const size = 120;
+  const x = 10 + expansion * (size - 20);
+  const y = 10 + (1 - gathering) * (size - 20);
+  const quadrant = polarityQuadrant(expansion, gathering);
+  return (
+    <div className="polarity-point">
+      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img"
+        aria-label="Расширение и собранность недели">
+        <line x1={size / 2} y1="6" x2={size / 2} y2={size - 6} stroke="var(--line)" strokeDasharray="3 4" />
+        <line x1="6" y1={size / 2} x2={size - 6} y2={size / 2} stroke="var(--line)" strokeDasharray="3 4" />
+        <circle cx={x} cy={y} r="5" fill="var(--accord)" />
+      </svg>
+      <div className="polarity-axes">
+        <span className="tiny dim">→ расширение (тепло · ясность)</span>
+        <span className="tiny dim">↑ собранность (покой · сила)</span>
+      </div>
+      {quadrant && <p className="small">{quadrant.label}</p>}
+    </div>
+  );
+}
 
 const OBSERVATION_STATUS = {
   insufficient: 'Собираем данные',
@@ -51,6 +89,14 @@ export default function Dynamics({ lists, addEntry }) {
         <button className="tbtn" style={{ marginTop: 8 }} onClick={() => setShowInfo(true)}>
           Как читать тороид — линии, дуги и точки
         </button>
+      </Card>
+
+      <Card eyebrow="Расширение и собранность" tight>
+        <p className="dim small">
+          Тепло и ясность — одна ось; покой и сила — другая. Усреднённые в одно число,
+          они стирают разницу между «разогнан, но не держит» и «собран, но глухо».
+        </p>
+        <PolarityPoint expansion={summary.expansion} gathering={summary.gathering} />
       </Card>
 
       <Card eyebrow="Эта неделя" tight>
@@ -158,8 +204,9 @@ export default function Dynamics({ lists, addEntry }) {
 
           <p className="eyebrow" style={{ marginTop: 16 }}>Дуги вокруг тела — практики частей</p>
           <p className="dim small">
-            Чем больше практик части за неделю, тем ярче и полнее её дуга
-            (добавляются линии). Три дуги по высоте тела:
+            Кольцо дуги прибывает от внешнего края к телу: сперва появляется
+            внешняя линия, ядро — ближе к телу — замыкается последним. Это число
+            задетых дней недели, а не объём. Три дуги по высоте тела:
           </p>
           <div className="chips">
             {LEGEND.slice(0, 3).map(([id, label]) => (
@@ -173,16 +220,11 @@ export default function Dynamics({ lists, addEntry }) {
             ))}
           </div>
 
-          <p className="eyebrow" style={{ marginTop: 16 }}>Внешний пунктирный контур — воля</p>
-          <p className="dim small">
-            Две оболочки тороида вокруг фигуры. Толще и ярче — когда за неделю
-            больше практик модуля «воля».
-          </p>
-
           <p className="eyebrow" style={{ marginTop: 16 }}>Точки на оси тела</p>
           <p className="dim small">
-            Отмечают три части — голову (мышление), грудь (чувства и тело),
-            живот (питание). Крупнее — когда части уделено больше внимания за неделю.
+            Отмечают три части — голову (мышление), грудь (чувства и тело), низ
+            (питание и действие — еда и воля вместе, один обменно-двигательный
+            полюс). Крупнее — когда части уделено больше внимания за неделю.
           </p>
 
           <p className="eyebrow" style={{ marginTop: 16 }}>Вертикальная ось — аккорд</p>

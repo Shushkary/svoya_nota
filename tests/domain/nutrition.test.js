@@ -7,10 +7,13 @@ import {
   combinedDigestiveLoad,
   digestionActivityAt,
   digestionFinishesBy,
+  digestionMovementOverlapShare,
   digestiveLoad,
   effectiveDigestionHours,
   estimateDigestionHours,
   estimateProcessing,
+  lastDigestionFinishHour,
+  longestRestWindowMinutes,
   mealDigestionShift,
   mealTimestamp,
   nutrientProgress,
@@ -20,11 +23,13 @@ import {
 import { formatHour, hourToAngle, mealType } from '../../src/domain/nutrition/rhythm.js';
 import {
   ACTIVITY_MET,
+  continuousMovementDays,
   dailyActivityExpenditure,
   estimateActivityNutritionImpact,
   estimateActivityCalories,
   estimateStepCalories,
   findFreeActivityStart,
+  heatExposureDays,
 } from '../../src/domain/nutrition/activity.js';
 import { canonicalStepsForDay, stepsActivity } from '../../src/domain/nutrition/steps.js';
 import { weekSummary } from '../../src/domain/loop.js';
@@ -260,6 +265,60 @@ test('активность учитывается во всём окне пер�
 
   assert.ok(walkFraction < restFraction, 'прогулка внутри окна должна ускорять затухание точек');
   assert.ok(runFraction > restFraction, 'интенсивная активность внутри окна должна замедлять затухание модели');
+});
+
+test('непрерывное движение считается по дням, а не по записям: рывки и короткие сессии не входят', () => {
+  const now = new Date(2026, 6, 20, 18, 0, 0);
+  const activities = [
+    { at: new Date(2026, 6, 10, 8, 0, 0).toISOString(), payload: { continuity: 'ровное', durationMin: 25, date: '2026-07-10' } },
+    { at: new Date(2026, 6, 10, 19, 0, 0).toISOString(), payload: { continuity: 'ровное', durationMin: 30, date: '2026-07-10' } }, // тот же день — не задваивает
+    { at: new Date(2026, 6, 12, 8, 0, 0).toISOString(), payload: { continuity: 'рывками', durationMin: 40, date: '2026-07-12' } }, // рывки не считаются
+    { at: new Date(2026, 6, 13, 8, 0, 0).toISOString(), payload: { continuity: 'ровное', durationMin: 10, date: '2026-07-13' } }, // короче 20 мин
+    { at: new Date(2026, 6, 14, 8, 0, 0).toISOString(), payload: { continuity: 'ровное', durationMin: 20, date: '2026-07-14', deleted: true } }, // удалена
+  ];
+  assert.equal(continuousMovementDays(activities, now, 14), 1);
+});
+
+test('тепловые события считаются по дням отдельно от нагрузки', () => {
+  const now = new Date(2026, 6, 20, 18, 0, 0);
+  const activities = [
+    { at: new Date(2026, 6, 15, 20, 0, 0).toISOString(), payload: { type: 'banya', date: '2026-07-15' } },
+    { at: new Date(2026, 6, 16, 8, 0, 0).toISOString(), payload: { type: 'heat', kind: 'hot_shower', date: '2026-07-16' } },
+    { at: new Date(2026, 6, 16, 21, 0, 0).toISOString(), payload: { type: 'heat', kind: 'cold_water', date: '2026-07-16' } }, // тот же день
+    { at: new Date(2026, 6, 17, 8, 0, 0).toISOString(), payload: { type: 'run', date: '2026-07-17' } }, // не тепло
+  ];
+  assert.equal(heatExposureDays(activities, now, 14), 2);
+});
+
+test('час завершения последнего переваривания берётся по самому позднему приёму', () => {
+  const meals = [
+    { kcal: 300, p: 15, f: 10, c: 30, fiber: 3, hour: 8, digestionH: 2 },
+    { kcal: 600, p: 30, f: 25, c: 50, fiber: 5, hour: 19, digestionH: 3 },
+  ];
+  assert.equal(lastDigestionFinishHour(meals, []), 22);
+  assert.equal(lastDigestionFinishHour([], []), null);
+});
+
+test('доля наложения еды и движения растёт, когда активность идёт во время переваривания', () => {
+  const now = new Date(2026, 6, 22, 12, 0, 0);
+  const meal = { kcal: 500, p: 25, f: 20, c: 45, fiber: 5, hour: 8, digestionH: 3, eatenAt: new Date(2026, 6, 22, 8, 0, 0).getTime() };
+  const noOverlap = digestionMovementOverlapShare([meal], [], now);
+  const withOverlap = digestionMovementOverlapShare([meal], [
+    { payload: { type: 'walk_brisk', startMin: 8 * 60 + 30, durationMin: 60, intensity: 'moderate' } },
+  ], now);
+  assert.equal(noOverlap, 0);
+  assert.ok(withOverlap > 0);
+});
+
+test('самое длинное окно покоя учитывает все приёмы дня', () => {
+  const now = new Date(2026, 6, 22, 23, 0, 0);
+  const meals = [
+    { kcal: 300, p: 15, f: 10, c: 30, fiber: 3, hour: 8, digestionH: 2, eatenAt: new Date(2026, 6, 22, 8, 0, 0).getTime() },
+    { kcal: 300, p: 15, f: 10, c: 30, fiber: 3, hour: 20, digestionH: 2, eatenAt: new Date(2026, 6, 22, 20, 0, 0).getTime() },
+  ];
+  const longest = longestRestWindowMinutes(meals, [], now);
+  // Между окончанием завтрака (~10:00) и началом ужина (20:00) — самое длинное окно.
+  assert.ok(longest >= 9 * 60 && longest <= 10 * 60 + 5);
 });
 
 test('нагрузка на тороиде учитывает активность: плавание > покой > прогулка', () => {

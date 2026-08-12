@@ -29,11 +29,13 @@ export function SliderRow({ label, ends, value, onChange, min = 1, max = 5 }) {
   );
 }
 
+// Порядок — по полярности расширение/собранность (тепло, ясность → покой, сила),
+// а не вперемешку: так видна структура, которую заполняет отметка.
 export const STATE_FIELDS = [
+  { id: 'warmth', label: 'Тепло к себе', ends: 'жёстко · тепло' },
+  { id: 'clarity', label: 'Ясность', ends: 'туманно · ясно' },
   { id: 'calm', label: 'Покой', ends: 'напряжённо · спокойно' },
   { id: 'energy', label: 'Энергия', ends: 'без сил · бодро' },
-  { id: 'clarity', label: 'Ясность', ends: 'туманно · ясно' },
-  { id: 'warmth', label: 'Тепло к себе', ends: 'жёстко · тепло' },
 ];
 
 export function StateSliders({ value, onChange, fields = STATE_FIELDS }) {

@@ -60,3 +60,43 @@ export function representativeStateValues(entries = []) {
     return values.length ? [values.reduce((sum, value) => sum + value, 0) / values.length] : [];
   });
 }
+
+// Тот же расчёт, что representativeStateValues, но по каждой оси отдельно —
+// без этого усреднение по дню стирает разницу между «тепло и ясно» и
+// «спокойно и с силой» ещё до того, как её можно увидеть.
+export function representativeStateByKey(entries = []) {
+  const summary = latestState(entries, STATE_PHASE.DAY_SUMMARY);
+  if (summary) {
+    return Object.fromEntries(STATE_VALUE_KEYS.map((key) => {
+      const value = Number(summary.payload?.[key]);
+      return [key, value >= 1 && value <= 5 ? value : null];
+    }));
+  }
+
+  const moments = entries.filter((entry) => statePhase(entry?.payload) === STATE_PHASE.MOMENT);
+  return Object.fromEntries(STATE_VALUE_KEYS.map((key) => {
+    const values = moments
+      .map((entry) => Number(entry.payload?.[key]))
+      .filter((value) => value >= 1 && value <= 5);
+    return [key, values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null];
+  }));
+}
+
+// Две сводные оси вместо одной: расширение (тепло · ясность) и собранность
+// (покой · сила). Их усреднение в одно число стирает полярность — человек с
+// высоким теплом и низким покоем и человек с обратной картиной по-разному
+// выглядят на плоскости, но одинаково — в единственном скаляре.
+export function polarity(values = {}) {
+  const norm = (raw) => {
+    const number = Number(raw);
+    return number >= 1 && number <= 5 ? (number - 1) / 4 : null;
+  };
+  const mean = (list) => {
+    const present = list.filter((value) => value !== null);
+    return present.length ? present.reduce((sum, value) => sum + value, 0) / present.length : null;
+  };
+  return {
+    expansion: mean([norm(values.warmth), norm(values.clarity)]),
+    gathering: mean([norm(values.calm), norm(values.energy)]),
+  };
+}

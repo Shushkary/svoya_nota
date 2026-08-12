@@ -236,6 +236,79 @@ export function combinedDigestiveLoad(meals, now = new Date(), activities = []) 
   return clamp(1 - quiet, 0, 1);
 }
 
+// ── Суточное кольцо: еда, движение и покой на одной оси ─────────────────────
+// Еда и движение сейчас встречаются только в знаменателе колец «% от цели».
+// Здесь — прямое измерение того, как они чередуются во времени: доля суток
+// с наложением, самое длинное окно покоя, час завершения последнего
+// переваривания. Ни одно из этих чисел не имеет цели или нормы.
+const MINUTES_PER_DAY = 24 * 60;
+
+function activityCoversMinute(activities, minute) {
+  return (activities || []).some((entry) => {
+    const a = (entry && entry.payload) || entry || {};
+    if (a.deleted) return false;
+    const start = numberOr(a.startMin);
+    const end = start + numberOr(a.durationMin);
+    return minute >= start && minute < end;
+  });
+}
+
+// Карта суток с шагом stepMinutes: идёт ли переваривание, идёт ли движение.
+function dayCoverage(meals, activities, now, stepMinutes = 5) {
+  const dayStart = new Date(now);
+  dayStart.setHours(0, 0, 0, 0);
+  const digesting = [];
+  const moving = [];
+  for (let minute = 0; minute < MINUTES_PER_DAY; minute += stepMinutes) {
+    const at = new Date(dayStart.getTime() + minute * 60_000);
+    const isDigesting = (meals || []).some((meal) => {
+      const hours = effectiveDigestionHours(meal, activities);
+      return digestionActivityAt(meal, at, hours) > 0.02;
+    });
+    digesting.push(isDigesting);
+    moving.push(activityCoversMinute(activities, minute));
+  }
+  return { digesting, moving, stepMinutes };
+}
+
+// Доля суток, где переваривание и движение идут одновременно.
+export function digestionMovementOverlapShare(meals, activities, now = new Date()) {
+  const { digesting, moving } = dayCoverage(meals, activities, now);
+  if (!digesting.length) return 0;
+  const overlapSteps = digesting.filter((isDigesting, index) => isDigesting && moving[index]).length;
+  return clamp(overlapSteps / digesting.length, 0, 1);
+}
+
+// Самое длинное непрерывное окно суток без переваривания, в минутах.
+export function longestRestWindowMinutes(meals, activities, now = new Date()) {
+  const { digesting, stepMinutes } = dayCoverage(meals, activities, now);
+  let longest = 0;
+  let current = 0;
+  for (const isDigesting of digesting) {
+    if (isDigesting) { current = 0; } else { current += stepMinutes; longest = Math.max(longest, current); }
+  }
+  return longest;
+}
+
+// Час завершения последнего переваривания за день (может быть > 24 — за полночь).
+// null, если приёмов нет.
+export function lastDigestionFinishHour(meals, activities) {
+  let latest = null;
+  for (const meal of (meals || [])) {
+    const source = meal || {};
+    const mealHour = Number.isFinite(Number(source.hour))
+      ? Number(source.hour)
+      : Number.isFinite(Number(source.eatenAt))
+        ? new Date(source.eatenAt).getHours() + new Date(source.eatenAt).getMinutes() / 60
+        : null;
+    if (mealHour === null) continue;
+    const hours = effectiveDigestionHours(source, activities);
+    const finish = mealHour + hours;
+    if (latest === null || finish > latest) latest = finish;
+  }
+  return latest;
+}
+
 export function processingScore(meals) {
   let score = 0;
   let weight = 0;

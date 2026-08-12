@@ -2,7 +2,7 @@
 // Чистые функции без React, DOM и сети. Все расчёты локальные (офлайн-first).
 
 import { isoDay } from './weekPlan.js';
-import { representativeStateValues } from './stateCheckIn.js';
+import { representativeStateByKey, representativeStateValues, polarity } from './stateCheckIn.js';
 
 export const dayKey = (d) => {
   const x = d instanceof Date ? d : new Date(d);
@@ -58,11 +58,16 @@ export function weekSummary(journal, now = new Date(), phoneStepsByDate = {}) {
   const willDone = wills.filter((w) => ['done', 'cancelled'].includes(w.payload.status));
 
   // Дуги: 2+ дня в неделю с активностью модуля — полная дуга (посильность, не максимализм).
+  // Питание и воля — один обменно-двигательный полюс (нижняя дуга); раздельные
+  // числа остаются в counts, чтобы ничего не терять при слиянии дуг.
+  const nutritionArc = clamp01(activeDays(meals, keys) / 4);
+  const willArc = clamp01((activeDays(byArc.will, keys) + activeDays(willDone, keys)) / 2);
   const arcs = {
-    nutrition: clamp01(activeDays(meals, keys) / 4),
+    nutrition: nutritionArc,
     feelings: clamp01(activeDays(byArc.feelings, keys) / 2),
     mind: clamp01(activeDays(byArc.mind, keys) / 2),
-    will: clamp01((activeDays(byArc.will, keys) + activeDays(willDone, keys)) / 2),
+    will: willArc,
+    lower: clamp01((nutritionArc + willArc) / 2),
   };
 
   // Ядро — Аккорд: практики согласованности за неделю.
@@ -82,6 +87,19 @@ export function weekSummary(journal, now = new Date(), phoneStepsByDate = {}) {
     ? stateVals.reduce((a, b) => a + b, 0) / stateVals.length
     : null;
   const warmth = avgState === null ? 0.5 : clamp01((avgState - 1) / 4);
+
+  // Расширение (тепло · ясность) и собранность (покой · сила) — по каждому
+  // дню отдельно, затем усреднены за неделю. warmth выше остаётся сводным
+  // числом для цвета силуэта; expansion/gathering не дают этой сводке стереть
+  // полярность там, где её видно — в «Динамике».
+  const dayPolarities = keys.map((key) =>
+    polarity(representativeStateByKey(states.filter((state) => dayKey(state.at) === key))));
+  const meanOf = (field) => {
+    const values = dayPolarities.map((p) => p[field]).filter((value) => value !== null);
+    return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+  };
+  const expansion = meanOf('expansion');
+  const gathering = meanOf('gathering');
 
   // Поток: энергия из трекера (шаги к 8000, сон к 7.5 ч) — без трекера нейтрально.
   // Локальные шаги телефона приоритетнее дневной ручной записи. Это не
@@ -113,7 +131,7 @@ export function weekSummary(journal, now = new Date(), phoneStepsByDate = {}) {
       willDone: willDone.filter((w) => w.payload.status === 'done').length,
       accord: byArc.accord.length,
     },
-    arcs, core, density, warmth, flow, avgState, avgDelta,
+    arcs, core, density, warmth, expansion, gathering, flow, avgState, avgDelta,
     activeDayKeys: [...touched],
   };
 }
