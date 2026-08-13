@@ -872,8 +872,8 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
             </div>
 
             <div className="nutrition-columns">
-              <section className="n-panel">
-                <p className="n-panel-label">добавить приём</p>
+              <details className="n-panel" open>
+                <summary className="n-panel-label">добавить приём</summary>
 
                 <div className="meal-text-entry">
                   <textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Опишите блюдо и порцию: например, «яичница на топлёном масле с зеленью, 200 г»" rows="2" />
@@ -935,12 +935,12 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
                 <div className="n-kv"><span>пищеварительная нагрузка сейчас</span><b>{Math.round(noise * 100)}% · {noise < .04 ? 'нет' : noise < .34 ? 'низкая' : noise < .67 ? 'умеренная' : 'высокая'}</b></div>
                 <div className="n-kv"><span>гликемическая нагрузка (GL)</span><b>{meals.length ? Math.round(total.c * .55) : '—'} · оценка</b></div>
                 <div className="fuel"><p><span>топливо · цикл Рендла</span><i>модель</i></p><div><b style={{ width: `${Math.min(100, share.carbs + 15)}%` }} /></div><footer><span>жир</span><span>{share.carbs > 55 ? 'глюкоза преобладает' : 'смешанное'}</span><span>глюкоза</span></footer></div>
-              </section>
+              </details>
 
               <WellnessPrefs now={clock} />
 
-              <section className="n-panel">
-                <p className="n-panel-label">вчерашние приёмы · добавить в сегодня</p>
+              <details className="n-panel">
+                <summary className="n-panel-label">вчерашние приёмы · добавить в сегодня</summary>
                 <div className="n-meal-list">
                   {draftMeals.map((meal) => (
                     <div className="n-meal-row" key={meal.id}>
@@ -963,10 +963,10 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
                     </span>
                   </div>
                 </div>
-              </section>
+              </details>
 
-              <section className="n-panel">
-                <p className="n-panel-label">активность и расход</p>
+              <details className="n-panel">
+                <summary className="n-panel-label">активность и расход</summary>
                 <div className="n-two"><label>тип<select value={actType} onChange={(event) => setActType(event.target.value)}>{Object.entries(ACTIVITY).map(([key, item]) => <option value={key} key={key}>{item[0]}</option>)}</select></label><div><span>интенсивность</span><div className="n-chips">{['low', 'moderate', 'high'].map((value) => <button className={actIntensity === value ? 'on' : ''} key={value} onClick={() => setActIntensity(value)}>{value === 'low' ? 'низкая' : value === 'moderate' ? 'умеренная' : 'высокая'}</button>)}</div></div></div>
                 <div><span>непрерывность</span><div className="n-chips">{CONTINUITY.map((value) => <button className={actContinuity === value ? 'on' : ''} key={value} onClick={() => setActContinuity(value)}>{value}</button>)}</div><small>ровное движение ≥20 мин считается в отдельную отметку ниже — не калории</small></div>
                 <div className="n-control"><div><span>длительность</span><b>{actDuration} мин</b></div><input type="range" min="5" max="120" step="5" value={actDuration} onChange={(event) => setActDuration(Number(event.target.value))} /></div>
@@ -982,10 +982,10 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
                 <div className="n-meal-list">{visualActivities.length === 0 ? <span className="n-empty">активностей пока нет</span> : <>{stepVisualActivity && <div className="n-meal-row" key="daily-steps"><span><b>{stepVisualActivity.label}</b> · дневной итог · {stepVisualActivity.kcal} ккал · оценка</span></div>}{timedActivities.map((entry) => <div className="n-meal-row" key={entry.clientId}><span>{formatHour(number(entry.payload.startMin) / 60)}–{formatHour((number(entry.payload.startMin) + number(entry.payload.durationMin, 1440)) / 60)} · <b>{entry.payload.label}</b> · {entry.payload.durationMin} мин · {entry.payload.kcal} ккал</span><span className="n-row-actions"><button title="Поправить" onClick={() => { setEditingActivity(entry); setActType(ACTIVITY[entry.payload.type] ? entry.payload.type : 'walk_brisk'); setActIntensity(entry.payload.intensity || 'moderate'); setActContinuity(CONTINUITY.includes(entry.payload.continuity) ? entry.payload.continuity : 'ровное'); setActDuration(number(entry.payload.durationMin, 1440)); setActStartMinute(number(entry.payload.startMin, 1439)); setActivityTimeTouched(true); }}>Поправить</button><button title="Удалить" onClick={() => updateEntry('activity', entry.clientId, { ...entry.payload, deleted: true })}>×</button></span></div>)}</>}</div>
                 <div className="n-kv"><span>расход за день</span><b>{Math.round(expenditure)} ккал · оценка</b></div><div className="n-kv"><span>записей активности</span><b>{visualActivities.length}</b></div>
                 <div className="n-kv"><span>дней из 14 с непрерывным движением ≥20 мин</span><b>{continuousDays}</b></div>
-              </section>
+              </details>
 
-              <section className="n-panel">
-                <p className="n-panel-label">тепло · смена состояния, не нагрузка</p>
+              <details className="n-panel">
+                <summary className="n-panel-label">тепло · смена состояния, не нагрузка</summary>
                 <p className="dim small">
                   Баня, горячий душ, прохладная вода, прогулка в холоде — факт и длительность,
                   без калорий и без пота. Только наблюдение: связь со спарклайном самочувствия
@@ -997,17 +997,17 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
                   ))}
                 </div>
                 <div className="n-kv"><span>дней из 14 со сменой температуры</span><b>{heatDays}</b></div>
-              </section>
+              </details>
 
-              <section className="n-panel">
-                <p className="n-panel-label">день · ориентиры</p>
+              <details className="n-panel">
+                <summary className="n-panel-label">день · ориентиры</summary>
                 <div className="n-kv"><span>приход за день</span><b>{Math.round(total.kcal)} ккал</b></div><div className="n-kv"><span>расход (активности)</span><b>{Math.round(expenditure)} ккал</b></div>
                 <div className="lowcarb"><p><span>плавный переход на низкоуглеводное</span><button className={lowCarb ? 'on' : ''} onClick={() => setLowCarb((value) => !value)}>{lowCarb ? 'вкл' : 'выкл'}</button></p>{lowCarb && <><div className="n-control"><div><span>неделя перехода</span><b>{lowCarbWeek} из 8</b></div><input type="range" min="1" max="8" value={lowCarbWeek} onChange={(event) => setLowCarbWeek(Number(event.target.value))} /></div><div className="n-kv"><span>ориентир углеводов</span><b>{targets.carb} г/день</b></div><div className="n-kv"><span>углеводы сегодня</span><b>{Math.round(total.c)} г</b></div></>}</div>
                 <button className="n-action ghost" onClick={() => { meals.forEach((meal) => updateEntry('meal', meal.entry.clientId, { ...meal.entry.payload, deleted: true })); activities.forEach((entry) => updateEntry('activity', entry.clientId, { ...entry.payload, deleted: true })); }}>Очистить день</button>
-              </section>
+              </details>
 
-              <section className="n-panel">
-                <p className="n-panel-label">сутки · пять фаз дня</p>
+              <details className="n-panel">
+                <summary className="n-panel-label">сутки · пять фаз дня</summary>
                 <p className="dim small">
                   Еда и движение встречаются здесь на одной оси времени, а не только
                   в знаменателе колец. Фазы — не часы на циферблате, а зазоры и доли
@@ -1028,13 +1028,13 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
                 )}
                 <div className="n-kv"><span>разброс этого часа за 14 дней</span><b>{finishHourSpread !== null ? `${finishHourSpread.toFixed(1)} ч · оценка` : 'мало данных'}</b></div>
                 <div className="n-kv"><span>ночной пост · последняя еда вчера → первая сегодня</span><b>{nightFast !== null ? `${nightFast.toFixed(1)} ч · измерено` : '—'}</b></div>
-              </section>
+              </details>
 
-              <section className="n-panel">
-                <p className="n-panel-label">неделя по дням</p>
+              <details className="n-panel">
+                <summary className="n-panel-label">неделя по дням</summary>
                 <div className="nutrition-week">{weekDays.map((day, index) => { const height = day.kcal ? Math.max(5, Math.min(100, day.kcal / Math.max(targets.kcal, 1) * 100)) : 2; return <button className={`${day.current ? 'current ' : ''}${selectedDay === index ? 'selected' : ''}`} key={day.key} onClick={() => setSelectedDay(index)}><span><i style={{ height: `${height}%`, background: day.kcal <= targets.kcal ? '#5D8A6E' : '#B0685C' }} /></span><b>{day.kcal ? '●' : '○'}</b><small>{day.label}</small></button>; })}</div>
                 <p className="week-detail">{weekDays[selectedDay].kcal ? `${weekDays[selectedDay].label}: ${Math.round(weekDays[selectedDay].kcal)} ккал · клетчатка ${Math.round(weekDays[selectedDay].fiber)} г` : `${weekDays[selectedDay].label}: данных нет`}</p>
-              </section>
+              </details>
             </div>
           </div>
           <p className="nutrition-foot">измеримое — отдельно · оценка — с диапазоном · направление — не приговор</p>

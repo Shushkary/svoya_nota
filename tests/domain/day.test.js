@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  daylightWeight, isEveningWindow, isMorningWindow, medianBedtimeHour, phase, wakeAnchorHour, WINDOWS,
+  daylightWeight, isEveningWindow, isMorningWindow, medianBedtimeHour, phase, wakeAnchorHour, windowAt, WINDOWS,
 } from '../../src/domain/rhythm/day.js';
 
 test('единая форма дня используется питанием и напоминаниями', () => {
@@ -73,6 +73,20 @@ test('фазовая координата одинакова для жаворо
   const lark = phase(11, 6, 22); // полдень для жаворонка (подъём в 6)
   const owl = phase(15, 10, 26 % 24); // тот же относительный момент для совы (подъём в 10, отбой в 2 ночи)
   assert.ok(Math.abs(lark - owl) < 1e-9);
+});
+
+test('windowAt находит окно по φ, включая границы диапазона', () => {
+  assert.equal(windowAt(0), 'lightAndMovement');
+  assert.equal(windowAt(0.07), 'lightAndMovement');
+  assert.equal(windowAt(0.08), 'mealAndAssimilation');
+  assert.equal(windowAt(0.5), 'mealAndAssimilation');
+  assert.equal(windowAt(0.6), 'activity');
+  assert.equal(windowAt(0.85), 'closing');
+  assert.equal(windowAt(1), 'nightFast');
+  assert.equal(windowAt(1.99), 'nightFast');
+  assert.equal(windowAt(2), null, 'вне объявленного диапазона');
+  assert.equal(windowAt(null), null);
+  assert.equal(windowAt(NaN), null);
 });
 
 test('окна суток объявлены один раз и покрывают [0,2) без дыр', () => {

@@ -4,15 +4,19 @@ import React, { useRef, useState } from 'react';
 import { byId } from '../../domain/practices.js';
 import { dayKey, kbjuOfDay } from '../../domain/loop.js';
 import {
-  latestState, openingState, STATE_PHASE, STATE_VALUE_KEYS, statePayload,
+  latestState, openingState, polarity, polarityQuadrant, representativeStateByKey,
+  STATE_PHASE, STATE_VALUE_KEYS, statePayload,
 } from '../../domain/stateCheckIn.js';
 import { parseTrackerCsv } from '../../infrastructure/trackerImport.js';
 import { loadPhoneSteps, savePhoneSteps } from '../../infrastructure/phoneSteps.js';
 import { estimateStepCalories } from '../../domain/nutrition/activity.js';
 import { isEveningBreathingWindow } from '../../domain/practice/reminders.js';
-import { isMorningWindow } from '../../domain/rhythm/day.js';
+import {
+  isMorningWindow, medianBedtimeHour, normalizeHour, phase, wakeAnchorHour, windowAt, WINDOWS,
+} from '../../domain/rhythm/day.js';
 import { DAY_NAMES, GENTLE, isoDay, planForDay, suggestGentle } from '../../domain/weekPlan.js';
 import { Card, Sheet, StateSliders } from '../components.jsx';
+import { warmthColor } from '../Toroid.jsx';
 
 const EMPTY_STATE = { calm: 3, energy: 3, clarity: 3, warmth: 3 };
 
@@ -74,6 +78,76 @@ function CheckIn({ states, addEntry, updateEntry }) {
   );
 }
 
+const WINDOW_LABELS = {
+  lightAndMovement: 'свет и движение',
+  mealAndAssimilation: 'приём и освоение',
+  activity: 'деятельность',
+  closing: 'закрытие',
+  nightFast: 'ночной пост',
+};
+// Цвет каждого окна — уже используемые в приложении тона (кольцо ккал,
+// цвет модулей «воля» и «аккорд»), а не новая палитра ради одного виджета.
+const WAKE_WINDOWS = [
+  ['lightAndMovement', '#8FB3C9'],
+  ['mealAndAssimilation', '#C8A96E'],
+  ['activity', '#7A5F9E'],
+  ['closing', '#8A6F4D'],
+];
+
+const hoursAfter = (hour, fromHour) => {
+  const diff = normalizeHour(hour) - normalizeHour(fromHour);
+  return diff >= 0 ? diff : diff + 24;
+};
+
+// Один виджет вместо семи часов на циферблате: положение в собственной дуге
+// подъём → отбой (полоса) и сегодняшняя полярность состояния (цвет точки).
+// Без данных за 14 дней — честное «пока рано», а не выдуманный час.
+function RhythmWidget({ wakeHour, bedtimeHour, now, expansion, gathering }) {
+  if (wakeHour === null || bedtimeHour === null) {
+    return (
+      <Card eyebrow="Сейчас" tight>
+        <p className="dim small">
+          Пока мало данных для дневного ритма — появится через несколько дней
+          отметок, приёмов и заметок о сне.
+        </p>
+      </Card>
+    );
+  }
+  const nowHour = now.getHours() + now.getMinutes() / 60;
+  const phaseValue = phase(nowHour, wakeHour, bedtimeHour);
+  const windowKey = windowAt(phaseValue);
+  const quadrant = polarityQuadrant(expansion, gathering);
+  const markerColor = expansion !== null && gathering !== null
+    ? warmthColor((expansion + gathering) / 2, 0.95)
+    : 'rgba(140,140,140,0.75)';
+  const inNight = phaseValue !== null && phaseValue >= 1;
+  const width = 300;
+  const barX = (v) => 8 + v * (width - 16);
+  const markerX = inNight ? width - 8 : barX(Math.min(1, Math.max(0, phaseValue ?? 0)));
+
+  return (
+    <Card eyebrow="Сейчас" tight>
+      <svg viewBox={`0 0 ${width} 22`} width="100%" height="22" role="img"
+        aria-label="Положение в дневном ритме">
+        {WAKE_WINDOWS.map(([key, color]) => {
+          const [start, end] = WINDOWS[key];
+          return (
+            <rect key={key} x={barX(start)} y="6" width={Math.max(0, barX(end) - barX(start))}
+              height="8" rx="2" fill={color} opacity={inNight ? 0.35 : 1} />
+          );
+        })}
+        <circle cx={markerX} cy="10" r="6" fill={markerColor} stroke="#fff" strokeWidth="1.5" />
+      </svg>
+      <p className="small" style={{ marginTop: 6 }}>
+        {inNight
+          ? `Ночной пост · ${hoursAfter(nowHour, bedtimeHour).toFixed(1)} ч после обычного отбоя`
+          : WINDOW_LABELS[windowKey] || '—'}
+        {quadrant && ` · ${quadrant.label}`}
+      </p>
+    </Card>
+  );
+}
+
 export default function Today({ journal, lists, addEntry, updateEntry, openPractice, goTo }) {
   const now = new Date();
   const today = dayKey(now);
@@ -81,6 +155,9 @@ export default function Today({ journal, lists, addEntry, updateEntry, openPract
   const states = lists.state.filter((s) => dayKey(s.at) === today);
   const firstState = openingState(states);
   const gentle = suggestGentle(firstState?.payload);
+  const wakeHour = wakeAnchorHour(lists, now);
+  const bedtimeHour = medianBedtimeHour(lists.activity, now);
+  const todayPolarity = polarity(representativeStateByKey(states));
   const donePractices = lists.practice.filter((p) => dayKey(p.at) === today);
   const kbju = kbjuOfDay(lists.meal, today);
   const todayActivities = lists.activity.filter((entry) => !entry.payload.deleted
@@ -152,6 +229,9 @@ export default function Today({ journal, lists, addEntry, updateEntry, openPract
 
   return (
     <>
+      <RhythmWidget wakeHour={wakeHour} bedtimeHour={bedtimeHour} now={now}
+        expansion={todayPolarity.expansion} gathering={todayPolarity.gathering} />
+
       <Card eyebrow={`${DAY_NAMES[isoDay(now) - 1]} · день ${plan.day} недели`} module={plan.module}>
         <h2>{plan.title}</h2>
         <p className="dim">{plan.note}</p>

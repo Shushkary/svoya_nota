@@ -96,6 +96,17 @@ export const WINDOWS = Object.freeze({
   nightFast: [1.00, 2.00],
 });
 
+// В каком из объявленных окон лежит данное значение φ. null — если φ не
+// вычислена (нет якорей) или выходит за пределы [0, 2).
+export function windowAt(phaseValue) {
+  if (phaseValue == null || !Number.isFinite(Number(phaseValue))) return null;
+  const value = Number(phaseValue);
+  for (const [key, [start, end]] of Object.entries(WINDOWS)) {
+    if (value >= start && value < end) return key;
+  }
+  return null;
+}
+
 // Медиана времени отхода ко сну за последние N дней — вместо фиксированного
 // часа (был магическим числом 18:00 в правиле «переваривание закончится
 // вовремя»). Ночные часы (после полуночи) продолжают вечер предыдущего дня,

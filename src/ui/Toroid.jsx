@@ -13,10 +13,11 @@ import React from 'react';
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
 // Интерполяция в RGB: холодный серо-синий → тёплый янтарь, без прохода через зелёный.
+// Экспортируется — тот же цвет состояния использует виджет «Сейчас» в «Сегодня».
 const cool = [122, 140, 160];
 const warm = [200, 135, 90];
 const mix = (a, b, t) => Math.round(a + (b - a) * t);
-const warmthColor = (t, alpha = 1) =>
+export const warmthColor = (t, alpha = 1) =>
   `rgba(${mix(cool[0], warm[0], t)},${mix(cool[1], warm[1], t)},${mix(cool[2], warm[2], t)},${alpha})`;
 
 // Три кольца дуги — от внешнего (k=1) к ядру (k=0.56). Каждое кольцо получает

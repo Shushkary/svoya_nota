@@ -6,6 +6,7 @@ import { MODULES } from '../../domain/practices.js';
 import {
   comebacks, dayKey, stateSeries, tactOrder14, weekHistory, weekSummary,
 } from '../../domain/loop.js';
+import { polarityQuadrant } from '../../domain/stateCheckIn.js';
 import { DAY_NAMES } from '../../domain/weekPlan.js';
 import { Card, Sheet, Sparkline } from '../components.jsx';
 import Toroid, { MiniToroid } from '../Toroid.jsx';
@@ -17,20 +18,6 @@ const LEGEND = [
   ['mind', 'голова · мышление'],
   ['accord', 'ось · аккорд'],
 ];
-
-// Четыре режима расширения/собранности — без единого термина, только описание.
-const POLARITY_QUADRANTS = [
-  { expansion: true, gathering: false, label: 'разогнан, но не держит' },
-  { expansion: true, gathering: true, label: 'ясный день' },
-  { expansion: false, gathering: false, label: 'пусто' },
-  { expansion: false, gathering: true, label: 'собран, но глухо' },
-];
-
-function polarityQuadrant(expansion, gathering) {
-  if (expansion === null || gathering === null) return null;
-  const high = (value) => value >= 0.5;
-  return POLARITY_QUADRANTS.find((q) => q.expansion === high(expansion) && q.gathering === high(gathering)) || null;
-}
 
 function PolarityPoint({ expansion, gathering }) {
   if (expansion === null || gathering === null) {

@@ -100,3 +100,19 @@ export function polarity(values = {}) {
     gathering: mean([norm(values.calm), norm(values.energy)]),
   };
 }
+
+// Четыре режима расширения/собранности — светское описание, без единого
+// термина или названия традиции. Общий словарь для «Динамики» и «Сегодня»,
+// чтобы одна и та же картина не называлась по-разному на разных экранах.
+const POLARITY_QUADRANTS = Object.freeze([
+  { expansion: true, gathering: false, label: 'разогнан, но не держит' },
+  { expansion: true, gathering: true, label: 'ясный день' },
+  { expansion: false, gathering: false, label: 'пусто' },
+  { expansion: false, gathering: true, label: 'собран, но глухо' },
+]);
+
+export function polarityQuadrant(expansion, gathering) {
+  if (expansion === null || gathering === null) return null;
+  const high = (value) => value >= 0.5;
+  return POLARITY_QUADRANTS.find((q) => q.expansion === high(expansion) && q.gathering === high(gathering)) || null;
+}
