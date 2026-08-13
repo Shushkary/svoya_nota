@@ -16,9 +16,7 @@ import ToroidCanvas from '../ToroidCanvas.jsx';
 import WellnessPrefs from '../WellnessPrefs.jsx';
 import FoodCatalogPicker from '../FoodCatalogPicker.jsx';
 import { foodComponent, searchFoods, sumFoodComponents } from '../../domain/nutrition/foodCatalog.js';
-import foodsBundle from '../../data/foods-core.json';
-
-const OFFLINE_FOODS = Array.isArray(foodsBundle) ? foodsBundle : foodsBundle.foods || [];
+import { loadFoodCatalog } from '../../infrastructure/foodCatalogLoader.js';
 
 const emptyForm = () => ({
   name: '', time: new Date().toTimeString().slice(0, 5), kcal: '', proteinG: '', fatG: '', carbG: '', fiberG: '', sodiumMg: '', potassiumMg: '', magnesiumMg: '',
@@ -510,10 +508,17 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
 
   // Офлайн-совпадения по описанию — работают без сети и без ИИ. Показываем их
   // раньше сетевой оценки: точное совпадение из таблиц не требует ни токена,
-  // ни согласия на ИИ, ни интернета вообще.
+  // ни согласия на ИИ, ни интернета вообще. Каталог грузится отдельным чанком,
+  // чтобы не задерживать первую отрисовку приложения.
+  const [offlineFoods, setOfflineFoods] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    loadFoodCatalog().then((list) => { if (alive) setOfflineFoods(list); });
+    return () => { alive = false; };
+  }, []);
   const offlineMatches = useMemo(
-    () => (description.trim().length >= 2 ? searchFoods(OFFLINE_FOODS, description, 4) : []),
-    [description],
+    () => (offlineFoods && description.trim().length >= 2 ? searchFoods(offlineFoods, description, 4) : []),
+    [offlineFoods, description],
   );
 
   const addOfflineMatch = (food) => {

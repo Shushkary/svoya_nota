@@ -3,6 +3,7 @@ const round1 = (value) => Math.round(value * 10) / 10;
 const SOURCE_LABELS = Object.freeze({
   ciqual: 'Ciqual (ANSES)',
   usda_foundation: 'USDA Foundation',
+  usda_sr28: 'USDA SR28',
   cofid: 'UK CoFID',
   afcd: 'AFCD R3',
   manual: 'Введено вручную',
