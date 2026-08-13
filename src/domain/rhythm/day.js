@@ -42,6 +42,60 @@ export function isMorningWindow(date = new Date()) {
   return date.getHours() < 12;
 }
 
+// Момент подъёма — не спрашивается отдельно, а берётся как час первой любой
+// записи дня (состояние, приём, активность, практика, ритуал). Дешевле и
+// честнее вопроса «во сколько вы встаёте»: это то, что человек уже показал
+// своими действиями, а не то, что он о себе думает.
+const WAKE_SIGNAL_KINDS = ['state', 'meal', 'activity', 'practice', 'ritual'];
+
+export function wakeAnchorHour(journal, now = new Date(), days = 14) {
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() - days);
+  const firstByDay = new Map();
+  for (const kind of WAKE_SIGNAL_KINDS) {
+    for (const entry of journal?.[kind] || []) {
+      if (entry?.payload?.deleted) continue;
+      const at = new Date(entry.at);
+      if (Number.isNaN(at.getTime()) || at < cutoff || at > now) continue;
+      const dayKey = `${at.getFullYear()}-${at.getMonth()}-${at.getDate()}`;
+      const hour = at.getHours() + at.getMinutes() / 60;
+      const existing = firstByDay.get(dayKey);
+      if (existing === undefined || hour < existing) firstByDay.set(dayKey, hour);
+    }
+  }
+  const hours = [...firstByDay.values()].sort((a, b) => a - b);
+  if (!hours.length) return null;
+  const mid = Math.floor(hours.length / 2);
+  return hours.length % 2 ? hours[mid] : (hours[mid - 1] + hours[mid]) / 2;
+}
+
+// Фазовая координата: доля собственной бодрственной дуги человека вместо
+// часа на циферблате. φ = 0 в момент подъёма, φ = 1 в момент отбоя, ночь
+// продолжается в [1, 2). «Жаворонок» и «сова» получают одну и ту же кривую
+// в φ и разные часы на экране — хронотип выводится, а не спрашивается.
+export function phase(hour, wakeHour, bedtimeHour) {
+  if (hour == null || wakeHour == null || bedtimeHour == null
+    || !Number.isFinite(Number(hour)) || !Number.isFinite(Number(wakeHour)) || !Number.isFinite(Number(bedtimeHour))) return null;
+  const wake = normalizeHour(wakeHour);
+  let bed = normalizeHour(bedtimeHour);
+  if (bed <= wake) bed += 24;
+  let t = normalizeHour(hour);
+  if (t < wake) t += 24;
+  if (t <= bed) return (t - wake) / (bed - wake);
+  const nextWake = wake + 24;
+  return 1 + (t - bed) / (nextWake - bed);
+}
+
+// Именованные окна поверх φ — модель, не измерение. Единственная объявленная
+// разметка суток вместо магических часов в компонентах.
+export const WINDOWS = Object.freeze({
+  lightAndMovement: [0.00, 0.08],
+  mealAndAssimilation: [0.08, 0.55],
+  activity: [0.55, 0.80],
+  closing: [0.80, 1.00],
+  nightFast: [1.00, 2.00],
+});
+
 // Медиана времени отхода ко сну за последние N дней — вместо фиксированного
 // часа (был магическим числом 18:00 в правиле «переваривание закончится
 // вовремя»). Ночные часы (после полуночи) продолжают вечер предыдущего дня,

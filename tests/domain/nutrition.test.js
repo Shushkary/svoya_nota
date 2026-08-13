@@ -9,6 +9,7 @@ import {
   digestionFinishesBy,
   digestionMovementOverlapShare,
   digestiveLoad,
+  earlyEnergyShare,
   effectiveDigestionHours,
   estimateDigestionHours,
   estimateProcessing,
@@ -16,6 +17,7 @@ import {
   longestRestWindowMinutes,
   mealDigestionShift,
   mealTimestamp,
+  nightFastHours,
   nutrientProgress,
   normalizeMeal,
   scaleMealPayload,
@@ -30,6 +32,7 @@ import {
   estimateStepCalories,
   findFreeActivityStart,
   heatExposureDays,
+  lateActivityShare,
 } from '../../src/domain/nutrition/activity.js';
 import { canonicalStepsForDay, stepsActivity } from '../../src/domain/nutrition/steps.js';
 import { weekSummary } from '../../src/domain/loop.js';
@@ -319,6 +322,34 @@ test('самое длинное окно покоя учитывает все п
   const longest = longestRestWindowMinutes(meals, [], now);
   // Между окончанием завтрака (~10:00) и началом ужина (20:00) — самое длинное окно.
   assert.ok(longest >= 9 * 60 && longest <= 10 * 60 + 5);
+});
+
+test('ночной пост считается от последней еды вчера до первой еды сегодня', () => {
+  assert.equal(nightFastHours(20, 8), 12);
+  assert.equal(nightFastHours(22.5, 7), 8.5);
+  assert.equal(nightFastHours(null, 8), null);
+  assert.equal(nightFastHours(20, null), null);
+});
+
+test('доля ранней энергии считается по времени приёма, а не по числу приёмов', () => {
+  const meals = [
+    { hour: 8, kcal: 600 },
+    { hour: 20, kcal: 200 },
+  ];
+  // окно 8..20, середина 14: только завтрак (600) попадает в раннюю половину
+  assert.equal(earlyEnergyShare(meals), 0.75);
+  assert.equal(earlyEnergyShare([{ hour: 8, kcal: 100 }]), null, 'одного приёма мало для окна');
+  assert.equal(earlyEnergyShare([]), null);
+});
+
+test('доля позднего движения не учитывает оценённое время (шаги)', () => {
+  const real = [{ payload: { startMin: 19 * 60, durationMin: 30 } }]; // 19:00, окно 8..20 → во второй половине
+  assert.equal(lateActivityShare(real, 8, 20), 1);
+  const early = [{ payload: { startMin: 9 * 60, durationMin: 30 } }]; // 9:00 → в первой половине
+  assert.equal(lateActivityShare(early, 8, 20), 0);
+  const estimated = [{ payload: { startMin: 0, durationMin: 1440, estimatedTiming: true } }];
+  assert.equal(lateActivityShare(estimated, 8, 20), null, 'без реальных активностей доля не определена');
+  assert.equal(lateActivityShare(real, 20, 8), null, 'некорректное окно (конец раньше начала) не считается');
 });
 
 test('нагрузка на тороиде учитывает активность: плавание > покой > прогулка', () => {

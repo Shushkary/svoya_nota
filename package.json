@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test tests/architecture.test.js tests/toroid.test.js tests/domain/nutrition.test.js tests/domain/nutritionTargets.test.js tests/domain/foodCatalog.test.js tests/domain/breathing.test.js tests/domain/application.test.js tests/domain/body.test.js tests/domain/barcode.test.js tests/domain/stateCheckIn.test.js tests/domain/insights.test.js tests/domain/day.test.js tests/storage.test.js tests/phoneSteps.test.js tests/theme.test.js",
+    "test": "node --test tests/architecture.test.js tests/toroid.test.js tests/domain/nutrition.test.js tests/domain/nutritionTargets.test.js tests/domain/foodCatalog.test.js tests/domain/breathing.test.js tests/domain/application.test.js tests/domain/body.test.js tests/domain/barcode.test.js tests/domain/stateCheckIn.test.js tests/domain/insights.test.js tests/domain/day.test.js tests/domain/loop.test.js tests/storage.test.js tests/phoneSteps.test.js tests/theme.test.js",
     "check:architecture": "node --test tests/architecture.test.js",
     "check:csp": "node scripts/csp-hashes.cjs",
     "check:legal": "node scripts/check-legal.cjs",

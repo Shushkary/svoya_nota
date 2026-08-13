@@ -309,6 +309,32 @@ export function lastDigestionFinishHour(meals, activities) {
   return latest;
 }
 
+// Ночной пост: последняя еда (вчера) → первая еда (сегодня). Измерено из
+// mealHour обоих дней; ни цели, ни нормы — только зазор.
+export function nightFastHours(lastMealHourYesterday, firstMealHourToday) {
+  if (lastMealHourYesterday === null || firstMealHourToday === null
+    || !Number.isFinite(Number(lastMealHourYesterday)) || !Number.isFinite(Number(firstMealHourToday))) return null;
+  const gap = (Number(firstMealHourToday) + 24) - Number(lastMealHourYesterday);
+  return gap > 0 ? gap : null;
+}
+
+// Доля суточной энергии, пришедшаяся на первую половину пищевого окна дня
+// (от первого приёма до последнего). Не про «есть раньше лучше» — про то,
+// смещён ли день к одному краю пищевого окна, которое человек сам задаёт.
+export function earlyEnergyShare(meals) {
+  const withHours = (meals || []).filter((meal) => Number.isFinite(Number(meal?.hour)));
+  if (withHours.length < 2) return null;
+  const hours = withHours.map((meal) => Number(meal.hour));
+  const first = Math.min(...hours);
+  const last = Math.max(...hours);
+  if (last <= first) return null;
+  const mid = (first + last) / 2;
+  const total = withHours.reduce((sum, meal) => sum + (Number(meal.kcal) || 0), 0);
+  if (total <= 0) return null;
+  const early = withHours.filter((meal) => Number(meal.hour) <= mid).reduce((sum, meal) => sum + (Number(meal.kcal) || 0), 0);
+  return clamp(early / total, 0, 1);
+}
+
 export function processingScore(meals) {
   let score = 0;
   let weight = 0;

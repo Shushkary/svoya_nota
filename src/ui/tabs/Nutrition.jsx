@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { errorText, api } from '../../infrastructure/api.js';
 import { prepareMealImage } from '../../infrastructure/image-processing.js';
-import { aggregateMeals, clampMealTimestamp, combinedDigestiveLoad, digestionActivityAt, digestionFinishesBy, digestionMovementOverlapShare, estimateDigestionHours, effectiveDigestionHours, estimateProcessing, lastDigestionFinishHour, longestRestWindowMinutes, mealTimestamp, nutrientProgress, processingScore, scaleMealPayload } from '../../domain/nutrition/meal.js';
+import { aggregateMeals, clampMealTimestamp, combinedDigestiveLoad, digestionActivityAt, digestionFinishesBy, digestionMovementOverlapShare, earlyEnergyShare, estimateDigestionHours, effectiveDigestionHours, estimateProcessing, lastDigestionFinishHour, longestRestWindowMinutes, mealTimestamp, nightFastHours, nutrientProgress, processingScore, scaleMealPayload } from '../../domain/nutrition/meal.js';
 import { computeNutritionTargets } from '../../domain/nutrition/targets.js';
-import { CONTINUITY, continuousMovementDays, estimateActivityNutritionImpact, findFreeActivityStart, HEAT_KINDS, heatExposureDays } from '../../domain/nutrition/activity.js';
+import { CONTINUITY, continuousMovementDays, estimateActivityNutritionImpact, findFreeActivityStart, HEAT_KINDS, heatExposureDays, lateActivityShare } from '../../domain/nutrition/activity.js';
 import { formatHour, mealType, normalizeHour } from '../../domain/nutrition/rhythm.js';
-import { medianBedtimeHour } from '../../domain/rhythm/day.js';
+import { medianBedtimeHour, wakeAnchorHour } from '../../domain/rhythm/day.js';
 import { parseGs1, isValidGtin } from '../../domain/barcode.js';
 import { latestWeightKg } from '../../infrastructure/weight.js';
 import { latestWaistCm } from '../../infrastructure/bodyStorage.js';
@@ -352,6 +352,15 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
   const activities = useMemo(() => lists.activity
     .filter((entry) => !entry.payload?.deleted && localDay(entry.at) === today)
     .sort((left, right) => Number(left.payload?.startMin || 0) - Number(right.payload?.startMin || 0)), [lists.activity, today]);
+  const profile = lists.profile?.find((entry) => !entry.payload?.deleted)?.payload || {};
+  const dailySteps = canonicalStepsForDay(today, { [today]: loadPhoneSteps(today) }, activities);
+  const stepVisualActivity = stepsActivity(dailySteps?.steps, Number(profile.height) || 170, dailySteps?.source);
+  // У итоговых шагов нет достоверного времени. Не смешиваем их с реальными
+  // тренировками при расчёте влияния на приём пищи и не считаем дважды.
+  const timedActivities = activities.filter((entry) => !entry.payload?.dailySteps);
+  const visualActivities = stepVisualActivity
+    ? [...timedActivities, { payload: stepVisualActivity, clientId: `steps-${today}` }]
+    : timedActivities;
   // Собственный ритм вместо фиксированных 18:00 для всех: медиана времени
   // отхода ко сну за 14 дней. Без данных — нейтральный час по умолчанию,
   // никак не связанный с личным ритмом (честно помечен как дефолт ниже).
@@ -389,19 +398,24 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
     }).filter((value) => value !== null);
     return values.length >= 2 ? Math.max(...values) - Math.min(...values) : null;
   }, [lists.meal, lists.activity, clock]);
+  // Момент подъёма — не вопрос, а час первой любой записи дня (медиана за
+  // 14 дней). От него — зазор «подъём → первая еда» и доля ранней/поздней
+  // энергии и движения в пределах собственного пищевого окна.
+  const wakeHourToday = useMemo(() => wakeAnchorHour(lists, new Date(clock)), [lists, clock]);
+  const wakeToFirstMealHours = useMemo(() => {
+    if (wakeHourToday === null || !meals.length) return null;
+    const gap = meals[0].hour - wakeHourToday;
+    return gap >= 0 ? gap : null;
+  }, [wakeHourToday, meals]);
+  const earlyEnergy = useMemo(() => earlyEnergyShare(meals), [meals]);
+  const lateActivity = useMemo(
+    () => lateActivityShare(timedActivities, meals[0]?.hour ?? null, meals.at(-1)?.hour ?? null),
+    [timedActivities, meals],
+  );
   const total = useMemo(() => aggregateMeals(meals), [meals]);
   const noise = useMemo(() => combinedDigestiveLoad(meals, new Date(clock), activities), [meals, clock, activities]);
   const share = macroShare(total);
   const processing = processingScore(meals);
-  const profile = lists.profile?.find((entry) => !entry.payload?.deleted)?.payload || {};
-  const dailySteps = canonicalStepsForDay(today, { [today]: loadPhoneSteps(today) }, activities);
-  const stepVisualActivity = stepsActivity(dailySteps?.steps, Number(profile.height) || 170, dailySteps?.source);
-  // У итоговых шагов нет достоверного времени. Не смешиваем их с реальными
-  // тренировками при расчёте влияния на приём пищи и не считаем дважды.
-  const timedActivities = activities.filter((entry) => !entry.payload?.dailySteps);
-  const visualActivities = stepVisualActivity
-    ? [...timedActivities, { payload: stepVisualActivity, clientId: `steps-${today}` }]
-    : timedActivities;
   const weightKg = latestWeightKg();
   const waistCm = latestWaistCm();
   const activityImpact = estimateActivityNutritionImpact(
@@ -443,6 +457,10 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
   const copiedFromYesterday = useMemo(() => new Set(
     meals.map((meal) => meal.entry.payload?.copiedFrom).filter(Boolean),
   ), [meals]);
+  const nightFast = useMemo(
+    () => nightFastHours(draftMeals.at(-1)?.hour ?? null, meals[0]?.hour ?? null),
+    [draftMeals, meals],
+  );
 
   const torusSegments = [...meals.map((meal, index) => {
     const level = Math.min(1, (meal.kcal / 700 + meal.f / 35) / 2);
@@ -989,14 +1007,18 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
               </section>
 
               <section className="n-panel">
-                <p className="n-panel-label">сутки · еда, движение, покой</p>
+                <p className="n-panel-label">сутки · пять фаз дня</p>
                 <p className="dim small">
                   Еда и движение встречаются здесь на одной оси времени, а не только
-                  в знаменателе колец. Ни у одного числа ниже нет цели или нормы.
+                  в знаменателе колец. Фазы — не часы на циферблате, а зазоры и доли
+                  между вашими же событиями дня. Ни у одного числа ниже нет цели или нормы.
                 </p>
+                <div className="n-kv"><span>свет и движение · подъём → первая еда</span><b>{wakeToFirstMealHours !== null ? `${wakeToFirstMealHours.toFixed(1)} ч · измерено` : '—'}</b></div>
+                <div className="n-kv"><span>приём и освоение · ранняя доля энергии</span><b>{earlyEnergy !== null ? `${Math.round(earlyEnergy * 100)}% · измерено` : '—'}</b></div>
                 <div className="n-kv"><span>доля суток с наложением еды и движения</span><b>{Math.round(dayOverlapShare * 100)}% · измерено</b></div>
+                <div className="n-kv"><span>деятельность · доля движения во второй половине окна еды</span><b>{lateActivity !== null ? `${Math.round(lateActivity * 100)}% · измерено` : '—'}</b></div>
                 <div className="n-kv"><span>самое длинное окно без переваривания</span><b>{longestRestHours !== null ? `${longestRestHours.toFixed(1)} ч · измерено` : '—'}</b></div>
-                <div className="n-kv"><span>час завершения последнего переваривания</span><b>{todayFinishHour !== null ? `${formatHour(todayFinishHour % 24)} · измерено` : '—'}</b></div>
+                <div className="n-kv"><span>закрытие · час завершения последнего переваривания</span><b>{todayFinishHour !== null ? `${formatHour(todayFinishHour % 24)} · измерено` : '—'}</b></div>
                 {bedtimeGapHours !== null && (
                   <p className="tiny dim">
                     {bedtimeGapHours >= 0
@@ -1005,6 +1027,7 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
                   </p>
                 )}
                 <div className="n-kv"><span>разброс этого часа за 14 дней</span><b>{finishHourSpread !== null ? `${finishHourSpread.toFixed(1)} ч · оценка` : 'мало данных'}</b></div>
+                <div className="n-kv"><span>ночной пост · последняя еда вчера → первая сегодня</span><b>{nightFast !== null ? `${nightFast.toFixed(1)} ч · измерено` : '—'}</b></div>
               </section>
 
               <section className="n-panel">

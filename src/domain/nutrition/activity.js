@@ -112,6 +112,30 @@ export function heatExposureDays(activities = [], now = new Date(), days = 14) {
   return dayKeys.size;
 }
 
+// Доля движения, пришедшаяся на вторую половину пищевого окна дня (от
+// первого приёма до последнего). Оценённое время (дневной итог шагов) не
+// участвует — у него нет достоверного часа, делить окно пополам по нему нечестно.
+export function lateActivityShare(activities, windowStartHour, windowEndHour) {
+  if (!Number.isFinite(Number(windowStartHour)) || !Number.isFinite(Number(windowEndHour))
+    || Number(windowEndHour) <= Number(windowStartHour)) return null;
+  const midMin = ((Number(windowStartHour) + Number(windowEndHour)) / 2) * 60;
+  const endMin = Number(windowEndHour) * 60;
+  let totalMin = 0;
+  let lateMin = 0;
+  for (const entry of activities || []) {
+    const a = (entry && entry.payload) || entry || {};
+    if (a.deleted || a.estimatedTiming) continue;
+    const start = clamp(a.startMin, 0, 1440);
+    const duration = clamp(a.durationMin ?? a.dur, 0, 1440);
+    if (!duration) continue;
+    totalMin += duration;
+    const overlapStart = Math.max(start, midMin);
+    const overlapEnd = Math.min(start + duration, endMin);
+    if (overlapEnd > overlapStart) lateMin += overlapEnd - overlapStart;
+  }
+  return totalMin > 0 ? clamp(lateMin / totalMin, 0, 1) : null;
+}
+
 const FUEL_BY_INTENSITY = Object.freeze({
   low: { protein: 0.05, carb: 0.30, fat: 0.65, sweatLph: 0.3 },
   moderate: { protein: 0.05, carb: 0.50, fat: 0.45, sweatLph: 0.6 },

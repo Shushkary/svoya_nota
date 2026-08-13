@@ -3,6 +3,7 @@
 
 import { isoDay } from './weekPlan.js';
 import { representativeStateByKey, representativeStateValues, polarity } from './stateCheckIn.js';
+import { medianBedtimeHour } from './rhythm/day.js';
 
 export const dayKey = (d) => {
   const x = d instanceof Date ? d : new Date(d);
@@ -134,6 +135,59 @@ export function weekSummary(journal, now = new Date(), phoneStepsByDate = {}) {
     arcs, core, density, warmth, expansion, gathering, flow, avgState, avgDelta,
     activeDayKeys: [...touched],
   };
+}
+
+const mealHourOf = (entry) => {
+  const payload = entry.payload || {};
+  if (Number.isFinite(Number(payload.mealHour))) return Number(payload.mealHour);
+  const at = new Date(entry.at);
+  return at.getHours() + at.getMinutes() / 60;
+};
+const entryHourOf = (entry) => {
+  const at = new Date(entry.at);
+  return at.getHours() + at.getMinutes() / 60;
+};
+
+// Нижний полюс как порядок четырёх тактов — приём → нагрузка → пауза → сон —
+// а не сумма двух дуг. Измеряется не объём, а последовательность: сколько
+// дней из 14 такты прошли по порядку, без переставленных (еда после
+// нагрузки в конце дня, движение после отбоя). «Нагрузка» — активность или
+// телесная волевая практика (модуль will): для этого такта неважно, из
+// какой вкладки пришла запись. День без одного из тактов просто не
+// засчитывается — плотность, а не серия.
+export function tactOrder14(journal, now = new Date(), days = 14) {
+  const bedtimeHour = medianBedtimeHour(journal.activity, now, days);
+  let ok = 0;
+  for (let i = 0; i < days; i += 1) {
+    const day = new Date(now);
+    day.setDate(day.getDate() - i);
+    const key = dayKey(day);
+    const dayMeals = (journal.meal || []).filter((e) => alive(e) && dayKey(e.at) === key);
+    if (!dayMeals.length) continue;
+
+    const dayActivities = (journal.activity || [])
+      .filter((e) => alive(e) && (e.payload.date || dayKey(e.at)) === key);
+    const hasSleep = dayActivities.some((e) => Number(e.payload.sleepHours) > 0);
+    if (!hasSleep) continue;
+
+    const dayWillPractices = (journal.practice || []).filter((e) => alive(e) && dayKey(e.at) === key
+      && e.payload.module === 'will' && e.payload.completed !== false);
+    const loadHours = [
+      ...dayActivities
+        .filter((e) => !e.payload.dailySteps && !Number(e.payload.sleepHours)
+          && Number.isFinite(Number(e.payload.startMin)) && Number(e.payload.durationMin) > 0)
+        .map((e) => (Number(e.payload.startMin) + Number(e.payload.durationMin)) / 60),
+      ...dayWillPractices.map(entryHourOf),
+    ];
+    if (!loadHours.length) continue;
+
+    const lastMeal = Math.max(...dayMeals.map(mealHourOf));
+    const lastLoad = Math.max(...loadHours);
+    if (lastMeal > lastLoad) continue; // еда после нагрузки в конце дня
+    if (bedtimeHour !== null && lastLoad > bedtimeHour) continue; // движение после отбоя
+    ok += 1;
+  }
+  return ok;
 }
 
 // Чистая функция текущей пищеварительной нагрузки. Вкладка «Питание» сохраняет

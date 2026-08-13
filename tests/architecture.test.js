@@ -70,6 +70,18 @@ test('имена ключей localStorage объявлены только в do
   }
 });
 
+test('domain/rhythm/* не участвует в вычислении полярности состояния', async () => {
+  // Инвариант: ни одна функция не должна принимать время суток и
+  // возвращать ожидаемое состояние человека. stateCheckIn.js — единственное
+  // место, где считается полярность (расширение/собранность), — не должен
+  // знать о фазе дня, иначе часы начнут предсказывать самочувствие.
+  const source = await readFile(path.join(ROOT, 'src', 'domain', 'stateCheckIn.js'), 'utf8');
+  for (const imported of importsOf(source)) {
+    assert.ok(!/[\\/]rhythm[\\/]/.test(imported),
+      `stateCheckIn.js импортирует ${imported} — время суток не должно участвовать в вычислении состояния`);
+  }
+});
+
 test('application зависит только от domain и переданных портов', async () => {
   const files = await javascriptFiles(path.join(ROOT, 'src', 'application'));
   for (const file of files) {

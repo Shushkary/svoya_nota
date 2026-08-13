@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  daylightWeight, isEveningWindow, isMorningWindow, medianBedtimeHour,
+  daylightWeight, isEveningWindow, isMorningWindow, medianBedtimeHour, phase, wakeAnchorHour, WINDOWS,
 } from '../../src/domain/rhythm/day.js';
 
 test('единая форма дня используется питанием и напоминаниями', () => {
@@ -37,4 +37,49 @@ test('медиана считается только за последние N �
     { at: '2026-07-12T12:00:00Z', payload: { bedtimeHour: 22 } },
   ];
   assert.equal(medianBedtimeHour(activities, now, 14), 22);
+});
+
+test('момент подъёма — час первой любой записи дня, медиана за 14 дней', () => {
+  const now = new Date(2026, 6, 15, 20, 0);
+  const journal = {
+    state: [{ at: new Date(2026, 6, 12, 7, 30).toISOString(), payload: {} }],
+    meal: [{ at: new Date(2026, 6, 13, 6, 45).toISOString(), payload: {} }],
+    activity: [
+      { at: new Date(2026, 6, 14, 7, 0).toISOString(), payload: {} },
+      { at: new Date(2026, 6, 14, 9, 0).toISOString(), payload: {} }, // тот же день — не первая запись
+    ],
+    practice: [],
+    ritual: [],
+  };
+  // часы: 7.5, 6.75, 7.0 → медиана 7.0
+  assert.equal(wakeAnchorHour(journal, now), 7);
+});
+
+test('момент подъёма без данных — null, а не произвольный час', () => {
+  const empty = { state: [], meal: [], activity: [], practice: [], ritual: [] };
+  assert.equal(wakeAnchorHour(empty, new Date(2026, 6, 15)), null);
+});
+
+test('фазовая координата: 0 в подъём, 1 в отбой, ночь продолжается в [1,2)', () => {
+  assert.equal(phase(7, 7, 23), 0);
+  assert.equal(phase(23, 7, 23), 1);
+  assert.equal(phase(15, 7, 23), 0.5);
+  assert.ok(phase(2, 7, 23) > 1 && phase(2, 7, 23) < 2, 'глубокая ночь — между 1 и 2');
+  assert.equal(phase(NaN, 7, 23), null);
+  assert.equal(phase(10, null, 23), null);
+});
+
+test('фазовая координата одинакова для жаворонка и совы в их же ритме', () => {
+  const lark = phase(11, 6, 22); // полдень для жаворонка (подъём в 6)
+  const owl = phase(15, 10, 26 % 24); // тот же относительный момент для совы (подъём в 10, отбой в 2 ночи)
+  assert.ok(Math.abs(lark - owl) < 1e-9);
+});
+
+test('окна суток объявлены один раз и покрывают [0,2) без дыр', () => {
+  const ranges = Object.values(WINDOWS);
+  assert.equal(ranges[0][0], 0);
+  assert.equal(ranges.at(-1)[1], 2);
+  for (let i = 1; i < ranges.length; i += 1) {
+    assert.equal(ranges[i][0], ranges[i - 1][1], `окно ${i} не стыкуется с предыдущим`);
+  }
 });

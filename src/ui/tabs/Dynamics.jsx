@@ -4,7 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { journalHypotheses } from '../../domain/insights.js';
 import { MODULES } from '../../domain/practices.js';
 import {
-  comebacks, dayKey, stateSeries, weekHistory, weekSummary,
+  comebacks, dayKey, stateSeries, tactOrder14, weekHistory, weekSummary,
 } from '../../domain/loop.js';
 import { DAY_NAMES } from '../../domain/weekPlan.js';
 import { Card, Sheet, Sparkline } from '../components.jsx';
@@ -74,6 +74,7 @@ export default function Dynamics({ lists, addEntry }) {
   const history = useMemo(() => weekHistory(journal, 4, new Date(), phoneSteps), [journal, phoneSteps]);
   const series = useMemo(() => stateSeries(journal.state, 28), [journal.state]);
   const returns = useMemo(() => comebacks(journal.practice), [journal.practice]);
+  const tactOrder = useMemo(() => tactOrder14(journal, new Date()), [journal]);
   const hypotheses = useMemo(() => journalHypotheses(journal), [journal]);
   const [review, setReview] = useState({ keep: '', change: '' });
   const [showInfo, setShowInfo] = useState(false);
@@ -97,6 +98,17 @@ export default function Dynamics({ lists, addEntry }) {
           они стирают разницу между «разогнан, но не держит» и «собран, но глухо».
         </p>
         <PolarityPoint expansion={summary.expansion} gathering={summary.gathering} />
+      </Card>
+
+      <Card eyebrow="Нижний полюс · четыре такта" tight>
+        <p className="dim small">
+          Приём → нагрузка → пауза → сон. Не объём каждого, а порядок: сколько дней
+          из 14 такты прошли без перестановок — еда не позже нагрузки, движение не
+          позже отбоя. День без одного из тактов просто не считается.
+        </p>
+        <div className="statgrid">
+          <div className="stat"><div className="n">{tactOrder}</div><div className="l">дней из 14 по порядку</div></div>
+        </div>
       </Card>
 
       <Card eyebrow="Эта неделя" tight>
