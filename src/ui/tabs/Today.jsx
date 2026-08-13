@@ -103,12 +103,14 @@ const hoursAfter = (hour, fromHour) => {
 // подъём → отбой (полоса) и сегодняшняя полярность состояния (цвет точки).
 // Без данных за 14 дней — честное «пока рано», а не выдуманный час.
 function RhythmWidget({ wakeHour, bedtimeHour, now, expansion, gathering }) {
+  const [showInfo, setShowInfo] = useState(false);
   if (wakeHour === null || bedtimeHour === null) {
     return (
       <Card eyebrow="Сейчас" tight>
         <p className="dim small">
           Пока мало данных для дневного ритма — появится через несколько дней
-          отметок, приёмов и заметок о сне.
+          отметок, приёмов и заметок о сне. Мы ничего не подгоняем под часы —
+          подождём, пока накопится ваша собственная картина.
         </p>
       </Card>
     );
@@ -144,6 +146,55 @@ function RhythmWidget({ wakeHour, bedtimeHour, now, expansion, gathering }) {
           : WINDOW_LABELS[windowKey] || '—'}
         {quadrant && ` · ${quadrant.label}`}
       </p>
+      <button type="button" className="tbtn" style={{ marginTop: 6 }} onClick={() => setShowInfo(true)}>
+        ⓘ что это за полоска
+      </button>
+      {showInfo && (
+        <Sheet onClose={() => setShowInfo(false)}>
+          <p className="eyebrow">Сейчас</p>
+          <h2>Что это за полоска</h2>
+          <p className="dim small">
+            Это не часы на стене, а ваш собственный день. Мы не спрашиваем,
+            жаворонок вы или сова, — просто смотрим, во сколько вы обычно
+            встаёте и ложитесь (по вашим же записям за 14 дней), и рисуем
+            дугу между этими двумя точками. У жаворонка и совы полоска
+            выглядит одинаково, даже если часы на циферблате у них разные.
+          </p>
+
+          <p className="eyebrow" style={{ marginTop: 16 }}>Цветные участки — фазы дня</p>
+          <p className="dim small">Слева направо, от подъёма к отбою:</p>
+          <div className="chips">
+            {WAKE_WINDOWS.map(([key, color]) => (
+              <span key={key} className="chip">
+                <span className="dot" style={{
+                  display: 'inline-block', width: 8, height: 8, borderRadius: 4,
+                  background: color, marginRight: 6,
+                }} />
+                {WINDOW_LABELS[key]}
+              </span>
+            ))}
+          </div>
+          <p className="dim small" style={{ marginTop: 8 }}>
+            После отбоя полоска гаснет и уступает место ночному посту — тому
+            промежутку, который вы почти всегда проводите во сне.
+          </p>
+
+          <p className="eyebrow" style={{ marginTop: 16 }}>Цвет точки — сегодняшнее состояние</p>
+          <p className="dim small">
+            Точка окрашена по вашим сегодняшним отметкам: от прохладного
+            серо-голубого к тёплому янтарю. Чем она теплее, тем больше в
+            сумме тепла к себе, ясности, покоя и энергии вы сегодня отметили.
+            Серая точка просто значит, что отметок сегодня ещё не было —
+            и это нормально, а не ошибка.
+          </p>
+
+          <p className="note" style={{ marginTop: 16 }}>
+            Иллюстрация по вашим же записям, а не расписание, которому
+            нужно следовать, и не диагноз.
+          </p>
+          <button className="btn" onClick={() => setShowInfo(false)}>Понятно</button>
+        </Sheet>
+      )}
     </Card>
   );
 }

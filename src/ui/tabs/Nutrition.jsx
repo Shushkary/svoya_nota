@@ -330,6 +330,7 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
   const [lowCarbWeek, setLowCarbWeek] = useState(1);
   const [selectedDay, setSelectedDay] = useState(6);
   const [showToroidInfo, setShowToroidInfo] = useState(false);
+  const [showPhaseInfo, setShowPhaseInfo] = useState(false);
   const [ringInfo, setRingInfo] = useState(null);
   const [activityTips, setActivityTips] = useState(false);
 
@@ -1028,6 +1029,9 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
                 )}
                 <div className="n-kv"><span>разброс этого часа за 14 дней</span><b>{finishHourSpread !== null ? `${finishHourSpread.toFixed(1)} ч · оценка` : 'мало данных'}</b></div>
                 <div className="n-kv"><span>ночной пост · последняя еда вчера → первая сегодня</span><b>{nightFast !== null ? `${nightFast.toFixed(1)} ч · измерено` : '—'}</b></div>
+                <button type="button" className="tbtn" style={{ marginTop: 6 }} onClick={() => setShowPhaseInfo(true)}>
+                  ⓘ что означают эти пять чисел
+                </button>
               </details>
 
               <details className="n-panel">
@@ -1147,6 +1151,60 @@ export default function Nutrition({ lists, addEntry, updateEntry, token, aiConse
             <div className="tl-item"><span className="tl-dot tl-pulse" /> амплитуда пульсации тора — нагрузка на пищеварение</div>
           </div>
           <p className="dim small" style={{ marginTop: 14 }}>Метафора, не измерение. Тороид показывает вычисленные (время, фаза) и оценённые (КБЖУ, нагрузка, топливо) величины. Он не измеряет глюкозу крови или гормоны в реальном времени. Не медицинская рекомендация.</p>
+        </Sheet>
+      )}
+
+      {showPhaseInfo && (
+        <Sheet onClose={() => setShowPhaseInfo(false)}>
+          <button className="tbtn" onClick={() => setShowPhaseInfo(false)}>← Закрыть</button>
+          <h2>Что означают эти пять чисел</h2>
+          <p className="dim small">
+            Обычно еда и движение живут в приложении порознь: сколько съели,
+            сколько потратили. Здесь — наоборот: пять чисел о том, как они
+            чередуются в течение вашего дня. Ни одно из них не имеет цели —
+            это просто честный снимок сегодняшнего дня, который со временем
+            можно сравнивать с вашим же обычным диапазоном.
+          </p>
+
+          <p className="eyebrow" style={{ marginTop: 14 }}>Свет и движение</p>
+          <p className="dim small">Сколько прошло от подъёма до первого приёма пищи.</p>
+
+          <p className="eyebrow" style={{ marginTop: 14 }}>Приём и освоение</p>
+          <p className="dim small">
+            Какая доля сегодняшней энергии пришлась на первую половину
+            вашего пищевого окна — от первого приёма до последнего.
+          </p>
+
+          <p className="eyebrow" style={{ marginTop: 14 }}>Наложение еды и движения</p>
+          <p className="dim small">
+            Какая доля суток прошла с одновременным перевариванием и
+            движением — просто наблюдение, не хорошо и не плохо само по себе.
+          </p>
+
+          <p className="eyebrow" style={{ marginTop: 14 }}>Деятельность</p>
+          <p className="dim small">
+            Какая доля сегодняшнего движения пришлась на вторую половину
+            пищевого окна, а не на первую.
+          </p>
+
+          <p className="eyebrow" style={{ marginTop: 14 }}>Закрытие</p>
+          <p className="dim small">
+            Час, когда по прогнозу закончится переваривание последнего
+            приёма, и зазор до вашего обычного отбоя — вместо чужого
+            совета «не есть после шести».
+          </p>
+
+          <p className="eyebrow" style={{ marginTop: 14 }}>Ночной пост</p>
+          <p className="dim small">
+            Сколько часов прошло между последней вчерашней едой и первой
+            сегодняшней — самое длинное окно покоя для пищеварения за сутки.
+          </p>
+
+          <p className="note" style={{ marginTop: 16 }}>
+            «Измерено» — это прямой подсчёт по вашим записям. «Оценка» —
+            прогноз с разбросом, а не точное число. Ни то, ни другое не
+            заменяет советы врача.
+          </p>
         </Sheet>
       )}
 

@@ -65,6 +65,8 @@ export default function Dynamics({ lists, addEntry }) {
   const hypotheses = useMemo(() => journalHypotheses(journal), [journal]);
   const [review, setReview] = useState({ keep: '', change: '' });
   const [showInfo, setShowInfo] = useState(false);
+  const [showPolarityInfo, setShowPolarityInfo] = useState(false);
+  const [showTactInfo, setShowTactInfo] = useState(false);
   const today = dayKey(new Date());
   const reviewDone = journal.practice.some(
     (p) => p.payload.practiceId === 'weekly-review' && summary.keys.includes(dayKey(p.at))
@@ -85,6 +87,9 @@ export default function Dynamics({ lists, addEntry }) {
           они стирают разницу между «разогнан, но не держит» и «собран, но глухо».
         </p>
         <PolarityPoint expansion={summary.expansion} gathering={summary.gathering} />
+        <button type="button" className="tbtn" style={{ marginTop: 8 }} onClick={() => setShowPolarityInfo(true)}>
+          ⓘ что значат эти четыре картины
+        </button>
       </Card>
 
       <Card eyebrow="Нижний полюс · четыре такта" tight>
@@ -96,6 +101,9 @@ export default function Dynamics({ lists, addEntry }) {
         <div className="statgrid">
           <div className="stat"><div className="n">{tactOrder}</div><div className="l">дней из 14 по порядку</div></div>
         </div>
+        <button type="button" className="tbtn" style={{ marginTop: 4 }} onClick={() => setShowTactInfo(true)}>
+          ⓘ что сбивает порядок
+        </button>
       </Card>
 
       <Card eyebrow="Эта неделя" tight>
@@ -245,6 +253,77 @@ export default function Dynamics({ lists, addEntry }) {
             Это иллюстрация ваших записей, а не измерение здоровья.
           </p>
           <button className="btn" onClick={() => setShowInfo(false)}>Понятно</button>
+        </Sheet>
+      )}
+
+      {showPolarityInfo && (
+        <Sheet onClose={() => setShowPolarityInfo(false)}>
+          <p className="eyebrow">Расширение и собранность</p>
+          <h2>Что значат эти четыре картины</h2>
+          <p className="dim small">
+            Раньше «Своя нота» сводила четыре отметки — покой, энергию, ясность,
+            тепло к себе — в одно среднее число. Удобно, но нечестно: день, когда
+            вы разогнаны и растеряны, и день, когда вы собраны и спокойны, могли
+            получить одну и ту же оценку. Точка на графике выше — способ этого
+            не делать: она держит две оси отдельно.
+          </p>
+          <p className="dim small">
+            По горизонтали — <b>расширение</b>: сколько в вас тепла к себе и
+            ясности. По вертикали — <b>собранность</b>: сколько покоя и силы.
+            Дальше вправо и выше — не «лучше», просто другая картина дня.
+          </p>
+
+          <p className="eyebrow" style={{ marginTop: 16 }}>Четыре угла</p>
+          <p className="dim small">
+            <b>Ясный день</b> — высокое расширение и высокая собранность:
+            интерес и тепло держатся на прочной основе.<br />
+            <b>Разогнан, но не держит</b> — расширение высокое, собранность
+            низкая: много тепла и идей, мало опоры под ними.<br />
+            <b>Собран, но глухо</b> — наоборот: покой и сила есть, а тепла и
+            интереса маловато.<br />
+            <b>Пусто</b> — обе оси низкие: день, который стоит просто заметить,
+            без выводов.
+          </p>
+
+          <p className="note" style={{ marginTop: 16 }}>
+            Это отражение ваших же отметок за неделю, а не диагноз и не то,
+            что нужно срочно исправлять. Нет ни одной «правильной» четверти.
+          </p>
+          <button className="btn" onClick={() => setShowPolarityInfo(false)}>Понятно</button>
+        </Sheet>
+      )}
+
+      {showTactInfo && (
+        <Sheet onClose={() => setShowTactInfo(false)}>
+          <p className="eyebrow">Нижний полюс</p>
+          <h2>Что сбивает порядок</h2>
+          <p className="dim small">
+            Еда и воля раньше жили в приложении как две отдельные дуги —
+            сколько записей еды, сколько волевых практик. Но за день важнее
+            не количество, а то, в каком порядке всё это случилось: приём
+            пищи, затем нагрузка (движение или волевая практика), затем пауза
+            перед сном, затем сам сон.
+          </p>
+          <p className="dim small">
+            День засчитывается «по порядку», если в нём нашлись все четыре
+            шага и они не перепутались местами:
+          </p>
+          <p className="dim small">
+            — еда не позже, чем последняя нагрузка дня;<br />
+            — нагрузка не позже вашего обычного отбоя.
+          </p>
+          <p className="dim small">
+            Если в дне не хватает хотя бы одного шага — скажем, вы не
+            отметили сон, — день просто не считается ни в плюс, ни в минус.
+            Пропуск не портит картину: важно, сколько дней из последних 14
+            сложились ровно, а не подряд ли они идут.
+          </p>
+
+          <p className="note" style={{ marginTop: 16 }}>
+            Наблюдение за вашими же записями, а не расписание, которому нужно
+            соответствовать.
+          </p>
+          <button className="btn" onClick={() => setShowTactInfo(false)}>Понятно</button>
         </Sheet>
       )}
     </>
