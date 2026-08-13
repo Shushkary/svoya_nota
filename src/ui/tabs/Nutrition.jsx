@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { errorText, api } from '../../infrastructure/api.js';
 import { prepareMealImage } from '../../infrastructure/image-processing.js';
-import { aggregateMeals, clampMealTimestamp, combinedDigestiveLoad, digestionActivityAt, digestionFinishesBy, digestionMovementOverlapShare, earlyEnergyShare, estimateDigestionHours, effectiveDigestionHours, estimateProcessing, lastDigestionFinishHour, longestRestWindowMinutes, mealTimestamp, nightFastHours, nutrientProgress, processingScore, scaleMealPayload } from '../../domain/nutrition/meal.js';
+import { aggregateMeals, clampMealTimestamp, combinedDigestiveLoad, digestionActivityAt, digestionFinishesBy, digestionMovementOverlapShare, earlyEnergyShare, estimateDigestionHours, effectiveDigestionHours, estimateProcessing, lastDigestionFinishHour, longestRestWindowMinutes, mealTimestamp, nearestClockTime, nightFastHours, nutrientProgress, processingScore, scaleMealPayload } from '../../domain/nutrition/meal.js';
 import { computeNutritionTargets } from '../../domain/nutrition/targets.js';
 import { CONTINUITY, continuousMovementDays, estimateActivityNutritionImpact, findFreeActivityStart, HEAT_KINDS, heatExposureDays, lateActivityShare } from '../../domain/nutrition/activity.js';
 import { formatHour, mealType, normalizeHour } from '../../domain/nutrition/rhythm.js';
@@ -32,9 +32,7 @@ const localDay = (value) => {
 
 function atFromTime(time, now = new Date()) {
   const [hours = 12, minutes = 0] = String(time).split(':').map(Number);
-  const timestamp = new Date(now);
-  timestamp.setHours(hours, minutes, 0, 0);
-  return timestamp;
+  return nearestClockTime(hours, minutes, now);
 }
 
 function formFromEstimate(result, fallbackName, source, mealMinute) {

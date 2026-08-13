@@ -182,6 +182,37 @@ export function mealTimestamp(hour, now = new Date()) {
   return timestamp.getTime();
 }
 
+// Часы:минуты почти всегда значат «сегодня» — ручной ввод времени приёма
+// всегда так и считал. Но у этого правила есть узкий слепой участок рядом
+// с полуночью: в 23:50 набранные «00:15» попадали не «через 25 минут», а
+// почти на сутки назад, в сегодняшнее утро, без единого предупреждения.
+//
+// Симметричное «ближайшее из соседних суток» здесь не годится — оно ломает
+// обычный случай (завтрак 08:00, внесённый вечером в 21:00 — 13-часовой
+// разрыв — увело бы дату на «завтра» и превратило бы нормальную позднюю
+// запись в фиктивное будущее). Поэтому день переносится только тогда, когда
+// это единственная разумная разгадка: истолкование «сегодня» уже далеко —
+// в прошлом или в будущем, — а соседние сутки дают тот же час совсем
+// рядом с now (тот же порог в 6 часов, что и у mealTimestamp для повтора
+// приёма). Обычные разрывы в пределах дня — как утренний завтрак, внесённый
+// вечером, — так и остаются «сегодня», как и раньше.
+export function nearestClockTime(hours, minutes, now = new Date()) {
+  const dayMs = 24 * 60 * 60 * 1000;
+  const imminentMs = 6 * 60 * 60 * 1000;
+  const today = new Date(now);
+  today.setHours(Math.trunc(numberOr(hours)), Math.trunc(numberOr(minutes)), 0, 0);
+
+  if (today.getTime() < now.getTime()) {
+    const tomorrow = new Date(today.getTime() + dayMs);
+    return tomorrow.getTime() - now.getTime() <= imminentMs ? tomorrow : today;
+  }
+  if (today.getTime() > now.getTime()) {
+    const yesterday = new Date(today.getTime() - dayMs);
+    return now.getTime() - yesterday.getTime() <= imminentMs ? yesterday : today;
+  }
+  return today;
+}
+
 export function normalizeMeal(meal, now = new Date()) {
   const source = meal && typeof meal === 'object' ? meal : {};
   const normalized = {

@@ -17,6 +17,7 @@ import {
   longestRestWindowMinutes,
   mealDigestionShift,
   mealTimestamp,
+  nearestClockTime,
   nightFastHours,
   nutrientProgress,
   normalizeMeal,
@@ -99,6 +100,74 @@ test('приём 23:30 после полуночи относится к пре�
   assert.equal(timestamp.getDate(), 22);
   assert.equal(timestamp.getHours(), 23);
   assert.equal(timestamp.getMinutes(), 30);
+});
+
+test('nearestClockTime: обычные часы того же дня остаются на сегодня', () => {
+  const now = new Date(2026, 6, 22, 12, 25, 0);
+  const future = nearestClockTime(15, 0, now); // позже сейчас, тот же день
+  assert.equal(future.getDate(), 22);
+  assert.equal(future.getHours(), 15);
+  assert.ok(future.getTime() > now.getTime());
+
+  const past = nearestClockTime(8, 0, now); // раньше сейчас, тот же день
+  assert.equal(past.getDate(), 22);
+  assert.equal(past.getHours(), 8);
+  assert.ok(past.getTime() < now.getTime());
+});
+
+test('nearestClockTime: набранные поздно ночью ранние часы означают «скоро», а не «почти сутки назад»', () => {
+  const now = new Date(2026, 6, 22, 23, 50, 0); // без пяти минут полночь
+  const result = nearestClockTime(0, 15, now); // «00:15»
+  // ближайшее попадание — через 25 минут (23 число), а не 22 числа утром (23.5 ч назад)
+  assert.equal(result.getDate(), 23);
+  assert.equal(result.getHours(), 0);
+  assert.equal(result.getMinutes(), 15);
+  assert.ok(result.getTime() > now.getTime(), 'должно оказаться в ближайшем будущем, а не почти сутки в прошлом');
+  assert.ok(result.getTime() - now.getTime() < 30 * 60 * 1000);
+});
+
+test('nearestClockTime: обычный разрыв внутри дня не улетает на соседние сутки', () => {
+  // Завтрак в 08:00, внесённый вечером в 21:00 — разрыв 13 часов, больше
+  // порога в 6 часов. Наивное «ближайшее из соседних суток» перекинуло бы
+  // это на «завтра 08:00» (11 часов в будущем) и превратило бы обычную
+  // позднюю запись в фиктивный будущий приём — здесь дата должна остаться
+  // сегодняшней.
+  const now = new Date(2026, 6, 22, 21, 0, 0);
+  const result = nearestClockTime(8, 0, now);
+  assert.equal(result.getDate(), 22);
+  assert.equal(result.getHours(), 8);
+  assert.ok(result.getTime() < now.getTime());
+});
+
+test('nearestClockTime: зеркальный случай — поздний час, набранный вскоре после полуночи', () => {
+  // Сейчас 02:00, набрано «23:00»: как «сегодняшнее» 23:00 это 21 час в
+  // будущем — явно не то, что имелось в виду. Ближайшие сутки назад дают
+  // 23:00 всего 3 часа назад — то есть «вчера вечером».
+  const now = new Date(2026, 6, 22, 2, 0, 0);
+  const result = nearestClockTime(23, 0, now);
+  assert.equal(result.getDate(), 21);
+  assert.equal(result.getHours(), 23);
+  assert.ok(result.getTime() < now.getTime());
+  assert.equal(now.getTime() - result.getTime(), 3 * 60 * 60 * 1000);
+});
+
+test('nearestClockTime: за порогом в 6 часов «сегодня» остаётся в силе, даже в будущем', () => {
+  const now = new Date(2026, 6, 22, 10, 0, 0);
+  const result = nearestClockTime(20, 0, now); // через 10 часов — не «вчера»
+  assert.equal(result.getDate(), 22);
+  assert.equal(result.getHours(), 20);
+  assert.ok(result.getTime() > now.getTime());
+});
+
+test('nearestClockTime: композиция с существующей защитой от будущего приёма', () => {
+  // Тот же сценарий 23:50 → «00:15», но проверяем именно то, что защита от
+  // будущего приёма (clampMealTimestamp) реагирует на результат — так эта
+  // ситуация в форме «Вручную» вместо тихой ошибки на сутки покажет то же
+  // честное предупреждение, что и обычный будущий час.
+  const now = new Date(2026, 6, 22, 23, 50, 0);
+  const requested = nearestClockTime(0, 15, now);
+  assert.ok(requested.getTime() > now.getTime());
+  assert.equal(clampMealTimestamp(requested, now), now.getTime());
 });
 
 test('некорректные числовые поля нормализуются на доменной границе', () => {
