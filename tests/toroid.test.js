@@ -131,6 +131,19 @@ test('активность рисуется холодной голубой ме
     'ожидалась голубая метка активности из эталона');
 });
 
+test('дневной итог шагов без времени рисуется тихой полосой, а не блоком реальной активности', () => {
+  const real = { start: 8 / 24 * TAU, span: 1 / 24 * TAU, level: .45, load: .45, isActivity: true };
+  const estimated = { start: 0, span: TAU, level: .45, load: .45, isActivity: true, estimatedTiming: true };
+  const realCtx = draw({ segments: [real] });
+  const estimatedCtx = draw({ segments: [estimated] });
+  assert.ok(realCtx.calls.some(([op, v]) => op === 'strokeStyle' && String(v).startsWith('rgba(120,205,225')),
+    'реальная активность — обычная голубая метка');
+  assert.ok(estimatedCtx.calls.some(([op, v]) => op === 'strokeStyle' && String(v).startsWith('rgba(150,190,200')),
+    'оценённое время (шаги) — отдельный, более тихий тон');
+  assert.ok(!estimatedCtx.calls.some(([op, v]) => op === 'strokeStyle' && String(v).startsWith('rgba(120,205,225')),
+    'оценённое время не должно выглядеть как настоящая активность');
+});
+
 test('прогноз после 18:00 даёт красную сетку, к 18:00 — жёлтую', () => {
   const lateStroke = draw({ segments: [meal({ start: 18 / 24 * TAU, late: true })] })
     .calls.some(([op, v]) => op === 'strokeStyle' && String(v).startsWith('rgba(255,45,34'));

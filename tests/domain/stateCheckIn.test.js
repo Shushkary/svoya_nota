@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  latestState, openingState, representativeStateValues, STATE_PHASE, statePayload,
+  latestState, openingState, polarityQuadrant, representativeStateValues, STATE_PHASE, statePayload,
 } from '../../src/domain/stateCheckIn.js';
 
 const entry = (at, phase, values) => ({
@@ -43,4 +43,13 @@ test('без итога аналитика усредняет каждый по�
   ];
 
   assert.deepEqual(representativeStateValues(states), [3, 3, 3, 3]);
+});
+
+test('квадрант полярности — общий словарь для «Динамики» и «Сегодня»', () => {
+  assert.equal(polarityQuadrant(0.8, 0.2).label, 'разогнан, но не держит');
+  assert.equal(polarityQuadrant(0.8, 0.8).label, 'ясный день');
+  assert.equal(polarityQuadrant(0.2, 0.2).label, 'пусто');
+  assert.equal(polarityQuadrant(0.2, 0.8).label, 'собран, но глухо');
+  assert.equal(polarityQuadrant(null, 0.8), null, 'без данных — null, а не произвольная метка');
+  assert.equal(polarityQuadrant(0.5, 0.5).label, 'ясный день', 'граница 0.5 включается в «высокое»');
 });

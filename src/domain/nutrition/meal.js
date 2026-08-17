@@ -182,6 +182,37 @@ export function mealTimestamp(hour, now = new Date()) {
   return timestamp.getTime();
 }
 
+// Часы:минуты почти всегда значат «сегодня» — ручной ввод времени приёма
+// всегда так и считал. Но у этого правила есть узкий слепой участок рядом
+// с полуночью: в 23:50 набранные «00:15» попадали не «через 25 минут», а
+// почти на сутки назад, в сегодняшнее утро, без единого предупреждения.
+//
+// Симметричное «ближайшее из соседних суток» здесь не годится — оно ломает
+// обычный случай (завтрак 08:00, внесённый вечером в 21:00 — 13-часовой
+// разрыв — увело бы дату на «завтра» и превратило бы нормальную позднюю
+// запись в фиктивное будущее). Поэтому день переносится только тогда, когда
+// это единственная разумная разгадка: истолкование «сегодня» уже далеко —
+// в прошлом или в будущем, — а соседние сутки дают тот же час совсем
+// рядом с now (тот же порог в 6 часов, что и у mealTimestamp для повтора
+// приёма). Обычные разрывы в пределах дня — как утренний завтрак, внесённый
+// вечером, — так и остаются «сегодня», как и раньше.
+export function nearestClockTime(hours, minutes, now = new Date()) {
+  const dayMs = 24 * 60 * 60 * 1000;
+  const imminentMs = 6 * 60 * 60 * 1000;
+  const today = new Date(now);
+  today.setHours(Math.trunc(numberOr(hours)), Math.trunc(numberOr(minutes)), 0, 0);
+
+  if (today.getTime() < now.getTime()) {
+    const tomorrow = new Date(today.getTime() + dayMs);
+    return tomorrow.getTime() - now.getTime() <= imminentMs ? tomorrow : today;
+  }
+  if (today.getTime() > now.getTime()) {
+    const yesterday = new Date(today.getTime() - dayMs);
+    return now.getTime() - yesterday.getTime() <= imminentMs ? yesterday : today;
+  }
+  return today;
+}
+
 export function normalizeMeal(meal, now = new Date()) {
   const source = meal && typeof meal === 'object' ? meal : {};
   const normalized = {
@@ -234,6 +265,105 @@ export function combinedDigestiveLoad(meals, now = new Date(), activities = []) 
     quiet *= 1 - clamp(digestiveLoad(meal) * digestionActivityAt(meal, now, h), 0, 0.95);
   }
   return clamp(1 - quiet, 0, 1);
+}
+
+// ── Суточное кольцо: еда, движение и покой на одной оси ─────────────────────
+// Еда и движение сейчас встречаются только в знаменателе колец «% от цели».
+// Здесь — прямое измерение того, как они чередуются во времени: доля суток
+// с наложением, самое длинное окно покоя, час завершения последнего
+// переваривания. Ни одно из этих чисел не имеет цели или нормы.
+const MINUTES_PER_DAY = 24 * 60;
+
+function activityCoversMinute(activities, minute) {
+  return (activities || []).some((entry) => {
+    const a = (entry && entry.payload) || entry || {};
+    if (a.deleted) return false;
+    const start = numberOr(a.startMin);
+    const end = start + numberOr(a.durationMin);
+    return minute >= start && minute < end;
+  });
+}
+
+// Карта суток с шагом stepMinutes: идёт ли переваривание, идёт ли движение.
+function dayCoverage(meals, activities, now, stepMinutes = 5) {
+  const dayStart = new Date(now);
+  dayStart.setHours(0, 0, 0, 0);
+  const digesting = [];
+  const moving = [];
+  for (let minute = 0; minute < MINUTES_PER_DAY; minute += stepMinutes) {
+    const at = new Date(dayStart.getTime() + minute * 60_000);
+    const isDigesting = (meals || []).some((meal) => {
+      const hours = effectiveDigestionHours(meal, activities);
+      return digestionActivityAt(meal, at, hours) > 0.02;
+    });
+    digesting.push(isDigesting);
+    moving.push(activityCoversMinute(activities, minute));
+  }
+  return { digesting, moving, stepMinutes };
+}
+
+// Доля суток, где переваривание и движение идут одновременно.
+export function digestionMovementOverlapShare(meals, activities, now = new Date()) {
+  const { digesting, moving } = dayCoverage(meals, activities, now);
+  if (!digesting.length) return 0;
+  const overlapSteps = digesting.filter((isDigesting, index) => isDigesting && moving[index]).length;
+  return clamp(overlapSteps / digesting.length, 0, 1);
+}
+
+// Самое длинное непрерывное окно суток без переваривания, в минутах.
+export function longestRestWindowMinutes(meals, activities, now = new Date()) {
+  const { digesting, stepMinutes } = dayCoverage(meals, activities, now);
+  let longest = 0;
+  let current = 0;
+  for (const isDigesting of digesting) {
+    if (isDigesting) { current = 0; } else { current += stepMinutes; longest = Math.max(longest, current); }
+  }
+  return longest;
+}
+
+// Час завершения последнего переваривания за день (может быть > 24 — за полночь).
+// null, если приёмов нет.
+export function lastDigestionFinishHour(meals, activities) {
+  let latest = null;
+  for (const meal of (meals || [])) {
+    const source = meal || {};
+    const mealHour = Number.isFinite(Number(source.hour))
+      ? Number(source.hour)
+      : Number.isFinite(Number(source.eatenAt))
+        ? new Date(source.eatenAt).getHours() + new Date(source.eatenAt).getMinutes() / 60
+        : null;
+    if (mealHour === null) continue;
+    const hours = effectiveDigestionHours(source, activities);
+    const finish = mealHour + hours;
+    if (latest === null || finish > latest) latest = finish;
+  }
+  return latest;
+}
+
+// Ночной пост: последняя еда (вчера) → первая еда (сегодня). Измерено из
+// mealHour обоих дней; ни цели, ни нормы — только зазор.
+export function nightFastHours(lastMealHourYesterday, firstMealHourToday) {
+  if (lastMealHourYesterday === null || firstMealHourToday === null
+    || !Number.isFinite(Number(lastMealHourYesterday)) || !Number.isFinite(Number(firstMealHourToday))) return null;
+  const gap = (Number(firstMealHourToday) + 24) - Number(lastMealHourYesterday);
+  return gap > 0 ? gap : null;
+}
+
+// Доля суточной энергии, пришедшаяся на первую половину пищевого окна дня
+// (от первого приёма до последнего). Не про «есть раньше лучше» — про то,
+// смещён ли день к одному краю пищевого окна, которое человек сам задаёт.
+export function earlyEnergyShare(meals) {
+  const withHours = (meals || []).filter((meal) => Number.isFinite(Number(meal?.hour)));
+  if (withHours.length < 2) return null;
+  const hours = withHours.map((meal) => Number(meal.hour));
+  const first = Math.min(...hours);
+  const last = Math.max(...hours);
+  if (last <= first) return null;
+  const mid = (first + last) / 2;
+  const total = withHours.reduce((sum, meal) => sum + (Number(meal.kcal) || 0), 0);
+  if (total <= 0) return null;
+  const early = withHours.filter((meal) => Number(meal.hour) <= mid).reduce((sum, meal) => sum + (Number(meal.kcal) || 0), 0);
+  return clamp(early / total, 0, 1);
 }
 
 export function processingScore(meals) {

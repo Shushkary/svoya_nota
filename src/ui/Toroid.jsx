@@ -1,37 +1,50 @@
 // Тороид вокруг силуэта человека — главная визуализация «Динамики».
 // Иллюстрация и метафора, не измерение здоровья.
 //
-// Отображение: дуги потока по вертикали тела (живот — питание, грудь — чувства,
-// голова — мышление, внешний контур — воля), ось — аккорд; тепло цвета —
-// самочувствие; скорость потока — энергия из трекера; плотность — регулярность.
+// Отображение: дуги потока по вертикали тела (низ — питание и действие, грудь —
+// чувства, голова — мышление), ось — аккорд; тепло цвета — самочувствие;
+// скорость потока — энергия из трекера; плотность — регулярность.
+//
+// Дуги прибывают от внешнего края к центру: кольцо у края появляется первым,
+// ядро (ближе к телу) замыкается последним. Заполнение читается как «неделя
+// собралась», а не как накопление — тот же принцип, что density вместо серий.
 import React from 'react';
 
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
 // Интерполяция в RGB: холодный серо-синий → тёплый янтарь, без прохода через зелёный.
+// Экспортируется — тот же цвет состояния использует виджет «Сейчас» в «Сегодня».
 const cool = [122, 140, 160];
 const warm = [200, 135, 90];
 const mix = (a, b, t) => Math.round(a + (b - a) * t);
-const warmthColor = (t, alpha = 1) =>
+export const warmthColor = (t, alpha = 1) =>
   `rgba(${mix(cool[0], warm[0], t)},${mix(cool[1], warm[1], t)},${mix(cool[2], warm[2], t)},${alpha})`;
+
+// Три кольца дуги — от внешнего (k=1) к ядру (k=0.56). Каждое кольцо получает
+// свою долю недельной шкалы intensity и проявляется по очереди: край раньше,
+// ядро позже.
+const RING_K = [1, 0.78, 0.56];
 
 // Группа дуг тороида: эллипсы вокруг вертикальной оси на высоте cy.
 // Полнота дуги = intensity (практики части за неделю); density — регулярность.
 function ArcBand({ cy, rxMax, ryMax, intensity, color, flowDur, density }) {
-  const n = intensity <= 0.02 ? 1 : 1 + Math.round(intensity * 2); // 1..3 линии
-  const lines = Array.from({ length: n }, (_, i) => {
-    const k = 1 - i * 0.22;
+  const step = 1 / RING_K.length;
+  const lines = RING_K.map((k, i) => {
+    const reach = clamp01((intensity - i * step) / step);
+    if (reach <= 0) return null;
     return (
       <ellipse
         key={i}
         cx="170" cy={cy} rx={rxMax * k} ry={ryMax * k}
         fill="none" stroke={color}
-        strokeWidth={1.8 + intensity * 1.6}
+        strokeWidth={1.4 + reach * 1.8}
         strokeDasharray="10 12"
         className="torusflow"
         style={{ animationDuration: `${flowDur}s`, animationDelay: `${i * 0.7}s` }}
-        opacity={(0.5 + intensity * 0.45) * (0.72 + density * 0.28)}
+        opacity={(0.35 + reach * 0.55) * (0.72 + density * 0.28)}
       />
     );
-  });
+  }).filter(Boolean);
   return <g>{lines}</g>;
 }
 
@@ -79,8 +92,8 @@ export default function Toroid({ summary, width = '100%' }) {
   const sx = 1;                                     // фиксированная ширина силуэта — метафора, не замер
   const headRx = 19, headRy = 24, headCy = 50;
   const bands = [
-    // живот — питание
-    { cy: 210, rxMax: 96, ryMax: 34, intensity: arcs.nutrition, color: 'var(--nutrition)' },
+    // низ — питание и действие (обменно-двигательный полюс: еда и воля вместе)
+    { cy: 210, rxMax: 96, ryMax: 34, intensity: arcs.lower, color: 'var(--nutrition)' },
     // грудь — чувства и тело
     { cy: 150, rxMax: 108, ryMax: 40, intensity: arcs.feelings, color: 'var(--feelings)' },
     // голова — мышление
@@ -88,17 +101,7 @@ export default function Toroid({ summary, width = '100%' }) {
   ];
   return (
     <svg viewBox="0 0 340 380" width={width} role="img"
-      aria-label="Тороид состояния: дуги питания, чувств, мышления, контур воли и ось согласованности">
-      {/* внешний контур — воля */}
-      <ellipse cx="170" cy="196" rx={132} ry={184} fill="none" stroke="var(--will)"
-        strokeWidth={1.8 + arcs.will * 1.6} strokeDasharray="12 14" className="torusflow"
-        style={{ animationDuration: `${flowDur + 3}s` }}
-        opacity={(0.48 + arcs.will * 0.42) * (0.72 + density * 0.28)} />
-      <ellipse cx="170" cy="196" rx={118} ry={172} fill="none" stroke="var(--will)"
-        strokeWidth={1.4 + arcs.will * 1.2} strokeDasharray="12 14" className="torusflow"
-        style={{ animationDuration: `${flowDur + 4.5}s`, animationDelay: '1s' }}
-        opacity={(0.36 + arcs.will * 0.4) * (0.72 + density * 0.28)} />
-
+      aria-label="Тороид состояния: дуги питания и действия, чувств, мышления и ось согласованности">
       {/* задние половины дуг */}
       {bands.map((b, i) => <ArcBand key={`b${i}`} {...b} flowDur={flowDur} density={density} />)}
 
@@ -120,7 +123,7 @@ export default function Toroid({ summary, width = '100%' }) {
       <circle cx="170" cy="185" r={12 + core * 8} fill="none" stroke="var(--accord)"
         strokeWidth="1" opacity={0.22 + core * 0.35} />
 
-      {/* точки зон на оси тела: голова · грудь · живот (воля — контур) */}
+      {/* точки зон на оси тела: голова · грудь · низ */}
       <g stroke="rgba(255,255,255,0.65)" strokeWidth="1">
         <circle cx="170" cy={headCy} r={4 + arcs.mind * 3} fill="var(--mind)"
           opacity={0.6 + arcs.mind * 0.4}>
@@ -130,9 +133,9 @@ export default function Toroid({ summary, width = '100%' }) {
           opacity={0.6 + arcs.feelings * 0.4}>
           <title>грудь · чувства и тело</title>
         </circle>
-        <circle cx="170" cy="210" r={4 + arcs.nutrition * 3} fill="var(--nutrition)"
-          opacity={0.6 + arcs.nutrition * 0.4}>
-          <title>живот · питание</title>
+        <circle cx="170" cy="210" r={4 + arcs.lower * 3} fill="var(--nutrition)"
+          opacity={0.6 + arcs.lower * 0.4}>
+          <title>низ · питание и действие</title>
         </circle>
       </g>
 
@@ -142,14 +145,12 @@ export default function Toroid({ summary, width = '100%' }) {
 
 export function MiniToroid({ summary, size = 56, label }) {
   const { arcs, core, warmth } = summary;
-  const mean = (arcs.nutrition + arcs.feelings + arcs.mind + arcs.will) / 4;
+  const mean = (arcs.lower + arcs.feelings + arcs.mind) / 3;
   return (
     <div className="mt1">
       <svg viewBox="0 0 60 60" width={size} height={size} aria-label={`Неделя ${label}`}>
-        <ellipse cx="30" cy="30" rx="24" ry="27" fill="none" stroke="var(--will)"
-          strokeWidth={1 + arcs.will * 1.4} opacity={0.25 + arcs.will * 0.6} />
         <ellipse cx="30" cy="38" rx="17" ry="6" fill="none" stroke="var(--nutrition)"
-          strokeWidth={1 + arcs.nutrition * 1.4} opacity={0.25 + arcs.nutrition * 0.6} />
+          strokeWidth={1 + arcs.lower * 1.4} opacity={0.25 + arcs.lower * 0.6} />
         <ellipse cx="30" cy="29" rx="19" ry="7" fill="none" stroke="var(--feelings)"
           strokeWidth={1 + arcs.feelings * 1.4} opacity={0.25 + arcs.feelings * 0.6} />
         <ellipse cx="30" cy="18" rx="13" ry="5" fill="none" stroke="var(--mind)"

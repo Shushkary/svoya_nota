@@ -4,20 +4,45 @@ import React, { useMemo, useState } from 'react';
 import { journalHypotheses } from '../../domain/insights.js';
 import { MODULES } from '../../domain/practices.js';
 import {
-  comebacks, dayKey, stateSeries, weekHistory, weekSummary,
+  comebacks, dayKey, stateSeries, tactOrder14, weekHistory, weekSummary,
 } from '../../domain/loop.js';
+import { polarityQuadrant } from '../../domain/stateCheckIn.js';
 import { DAY_NAMES } from '../../domain/weekPlan.js';
 import { Card, Sheet, Sparkline } from '../components.jsx';
 import Toroid, { MiniToroid } from '../Toroid.jsx';
 import { loadPhoneStepsMap } from '../../infrastructure/phoneSteps.js';
 
 const LEGEND = [
-  ['nutrition', 'живот · питание'],
+  ['nutrition', 'низ · питание и действие'],
   ['feelings', 'грудь · чувства и тело'],
   ['mind', 'голова · мышление'],
-  ['will', 'контур · воля'],
   ['accord', 'ось · аккорд'],
 ];
+
+function PolarityPoint({ expansion, gathering }) {
+  if (expansion === null || gathering === null) {
+    return <p className="tiny dim">Пока мало отметок состояния для этой картины.</p>;
+  }
+  const size = 120;
+  const x = 10 + expansion * (size - 20);
+  const y = 10 + (1 - gathering) * (size - 20);
+  const quadrant = polarityQuadrant(expansion, gathering);
+  return (
+    <div className="polarity-point">
+      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img"
+        aria-label="Расширение и собранность недели">
+        <line x1={size / 2} y1="6" x2={size / 2} y2={size - 6} stroke="var(--line)" strokeDasharray="3 4" />
+        <line x1="6" y1={size / 2} x2={size - 6} y2={size / 2} stroke="var(--line)" strokeDasharray="3 4" />
+        <circle cx={x} cy={y} r="5" fill="var(--accord)" />
+      </svg>
+      <div className="polarity-axes">
+        <span className="tiny dim">→ расширение (тепло · ясность)</span>
+        <span className="tiny dim">↑ собранность (покой · сила)</span>
+      </div>
+      {quadrant && <p className="small">{quadrant.label}</p>}
+    </div>
+  );
+}
 
 const OBSERVATION_STATUS = {
   insufficient: 'Собираем данные',
@@ -36,9 +61,12 @@ export default function Dynamics({ lists, addEntry }) {
   const history = useMemo(() => weekHistory(journal, 4, new Date(), phoneSteps), [journal, phoneSteps]);
   const series = useMemo(() => stateSeries(journal.state, 28), [journal.state]);
   const returns = useMemo(() => comebacks(journal.practice), [journal.practice]);
+  const tactOrder = useMemo(() => tactOrder14(journal, new Date()), [journal]);
   const hypotheses = useMemo(() => journalHypotheses(journal), [journal]);
   const [review, setReview] = useState({ keep: '', change: '' });
   const [showInfo, setShowInfo] = useState(false);
+  const [showPolarityInfo, setShowPolarityInfo] = useState(false);
+  const [showTactInfo, setShowTactInfo] = useState(false);
   const today = dayKey(new Date());
   const reviewDone = journal.practice.some(
     (p) => p.payload.practiceId === 'weekly-review' && summary.keys.includes(dayKey(p.at))
@@ -50,6 +78,31 @@ export default function Dynamics({ lists, addEntry }) {
         <Toroid summary={summary} />
         <button className="tbtn" style={{ marginTop: 8 }} onClick={() => setShowInfo(true)}>
           Как читать тороид — линии, дуги и точки
+        </button>
+      </Card>
+
+      <Card eyebrow="Расширение и собранность" tight>
+        <p className="dim small">
+          Тепло и ясность — одна ось; покой и сила — другая. Усреднённые в одно число,
+          они стирают разницу между «разогнан, но не держит» и «собран, но глухо».
+        </p>
+        <PolarityPoint expansion={summary.expansion} gathering={summary.gathering} />
+        <button type="button" className="tbtn" style={{ marginTop: 8 }} onClick={() => setShowPolarityInfo(true)}>
+          ⓘ что значат эти четыре картины
+        </button>
+      </Card>
+
+      <Card eyebrow="Нижний полюс · четыре такта" tight>
+        <p className="dim small">
+          Приём → нагрузка → пауза → сон. Не объём каждого, а порядок: сколько дней
+          из 14 такты прошли без перестановок — еда не позже нагрузки, движение не
+          позже отбоя. День без одного из тактов просто не считается.
+        </p>
+        <div className="statgrid">
+          <div className="stat"><div className="n">{tactOrder}</div><div className="l">дней из 14 по порядку</div></div>
+        </div>
+        <button type="button" className="tbtn" style={{ marginTop: 4 }} onClick={() => setShowTactInfo(true)}>
+          ⓘ что сбивает порядок
         </button>
       </Card>
 
@@ -158,8 +211,9 @@ export default function Dynamics({ lists, addEntry }) {
 
           <p className="eyebrow" style={{ marginTop: 16 }}>Дуги вокруг тела — практики частей</p>
           <p className="dim small">
-            Чем больше практик части за неделю, тем ярче и полнее её дуга
-            (добавляются линии). Три дуги по высоте тела:
+            Кольцо дуги прибывает от внешнего края к телу: сперва появляется
+            внешняя линия, ядро — ближе к телу — замыкается последним. Это число
+            задетых дней недели, а не объём. Три дуги по высоте тела:
           </p>
           <div className="chips">
             {LEGEND.slice(0, 3).map(([id, label]) => (
@@ -173,16 +227,11 @@ export default function Dynamics({ lists, addEntry }) {
             ))}
           </div>
 
-          <p className="eyebrow" style={{ marginTop: 16 }}>Внешний пунктирный контур — воля</p>
-          <p className="dim small">
-            Две оболочки тороида вокруг фигуры. Толще и ярче — когда за неделю
-            больше практик модуля «воля».
-          </p>
-
           <p className="eyebrow" style={{ marginTop: 16 }}>Точки на оси тела</p>
           <p className="dim small">
-            Отмечают три части — голову (мышление), грудь (чувства и тело),
-            живот (питание). Крупнее — когда части уделено больше внимания за неделю.
+            Отмечают три части — голову (мышление), грудь (чувства и тело), низ
+            (питание и действие — еда и воля вместе, один обменно-двигательный
+            полюс). Крупнее — когда части уделено больше внимания за неделю.
           </p>
 
           <p className="eyebrow" style={{ marginTop: 16 }}>Вертикальная ось — аккорд</p>
@@ -204,6 +253,77 @@ export default function Dynamics({ lists, addEntry }) {
             Это иллюстрация ваших записей, а не измерение здоровья.
           </p>
           <button className="btn" onClick={() => setShowInfo(false)}>Понятно</button>
+        </Sheet>
+      )}
+
+      {showPolarityInfo && (
+        <Sheet onClose={() => setShowPolarityInfo(false)}>
+          <p className="eyebrow">Расширение и собранность</p>
+          <h2>Что значат эти четыре картины</h2>
+          <p className="dim small">
+            Раньше «Своя нота» сводила четыре отметки — покой, энергию, ясность,
+            тепло к себе — в одно среднее число. Удобно, но нечестно: день, когда
+            вы разогнаны и растеряны, и день, когда вы собраны и спокойны, могли
+            получить одну и ту же оценку. Точка на графике выше — способ этого
+            не делать: она держит две оси отдельно.
+          </p>
+          <p className="dim small">
+            По горизонтали — <b>расширение</b>: сколько в вас тепла к себе и
+            ясности. По вертикали — <b>собранность</b>: сколько покоя и силы.
+            Дальше вправо и выше — не «лучше», просто другая картина дня.
+          </p>
+
+          <p className="eyebrow" style={{ marginTop: 16 }}>Четыре угла</p>
+          <p className="dim small">
+            <b>Ясный день</b> — высокое расширение и высокая собранность:
+            интерес и тепло держатся на прочной основе.<br />
+            <b>Разогнан, но не держит</b> — расширение высокое, собранность
+            низкая: много тепла и идей, мало опоры под ними.<br />
+            <b>Собран, но глухо</b> — наоборот: покой и сила есть, а тепла и
+            интереса маловато.<br />
+            <b>Пусто</b> — обе оси низкие: день, который стоит просто заметить,
+            без выводов.
+          </p>
+
+          <p className="note" style={{ marginTop: 16 }}>
+            Это отражение ваших же отметок за неделю, а не диагноз и не то,
+            что нужно срочно исправлять. Нет ни одной «правильной» четверти.
+          </p>
+          <button className="btn" onClick={() => setShowPolarityInfo(false)}>Понятно</button>
+        </Sheet>
+      )}
+
+      {showTactInfo && (
+        <Sheet onClose={() => setShowTactInfo(false)}>
+          <p className="eyebrow">Нижний полюс</p>
+          <h2>Что сбивает порядок</h2>
+          <p className="dim small">
+            Еда и воля раньше жили в приложении как две отдельные дуги —
+            сколько записей еды, сколько волевых практик. Но за день важнее
+            не количество, а то, в каком порядке всё это случилось: приём
+            пищи, затем нагрузка (движение или волевая практика), затем пауза
+            перед сном, затем сам сон.
+          </p>
+          <p className="dim small">
+            День засчитывается «по порядку», если в нём нашлись все четыре
+            шага и они не перепутались местами:
+          </p>
+          <p className="dim small">
+            — еда не позже, чем последняя нагрузка дня;<br />
+            — нагрузка не позже вашего обычного отбоя.
+          </p>
+          <p className="dim small">
+            Если в дне не хватает хотя бы одного шага — скажем, вы не
+            отметили сон, — день просто не считается ни в плюс, ни в минус.
+            Пропуск не портит картину: важно, сколько дней из последних 14
+            сложились ровно, а не подряд ли они идут.
+          </p>
+
+          <p className="note" style={{ marginTop: 16 }}>
+            Наблюдение за вашими же записями, а не расписание, которому нужно
+            соответствовать.
+          </p>
+          <button className="btn" onClick={() => setShowTactInfo(false)}>Понятно</button>
         </Sheet>
       )}
     </>

@@ -194,6 +194,9 @@ nav.tabbar svg{width:22px;height:22px}
 .minitor{display:flex;gap:10px;align-items:flex-end;margin-top:8px}
 .minitor .mt1{text-align:center;font-family:var(--f-sans);font-size:.64rem;color:var(--muted)}
 
+.polarity-point{display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:8px}
+.polarity-axes{display:flex;flex-direction:column;align-items:center;gap:2px}
+
 .breath-torus{display:flex;flex-direction:column;align-items:center;gap:6px;margin:8px 0}
 .breath-stage{background:radial-gradient(ellipse at 50% 46%,rgba(176,104,63,.10),transparent 60%),#fff;border:1px solid var(--line);border-radius:12px;padding:8px;width:100%;max-width:320px}
 .breath-stage canvas{width:100%;height:auto;aspect-ratio:5/4;display:block}
@@ -219,6 +222,7 @@ nav.tabbar svg{width:22px;height:22px}
 
 .meal-methods{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:2px 0 4px}
 .meal-text-entry{margin-bottom:2px}
+.offline-matches{margin:6px 0}
 .meal-or{display:flex;align-items:center;gap:10px;margin:14px 0 12px;font-family:var(--f-sans);font-size:.55rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
 .meal-or::before,.meal-or::after{content:"";height:1px;flex:1;background:var(--line)}
 /* Плитка способа ввода: значок над подписью — помещается в треть ширины телефона. */
@@ -300,6 +304,10 @@ nav.tabbar svg{width:22px;height:22px}
 @keyframes tlpulse{0%,100%{transform:scale(.85);opacity:.7}50%{transform:scale(1.12);opacity:1}}
 .n-panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:15px 16px;margin-bottom:16px}
 .n-panel-label{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-family:var(--f-sans);font-size:.58rem;letter-spacing:.16em;text-transform:uppercase;color:var(--acc)}
+summary.n-panel-label{list-style:none;cursor:pointer}
+summary.n-panel-label::-webkit-details-marker{display:none}
+summary.n-panel-label::before{content:"▸";display:inline-block;font-size:.68rem;transition:transform .15s ease;flex:none}
+details[open]>summary.n-panel-label::before{transform:rotate(90deg)}
 .n-panel-label::after{content:"";height:1px;flex:1;background:#D9E2DF}.n-panel-label.teal{color:#4A7C7E;margin-top:16px}
 .n-panel textarea{min-height:58px;font-family:var(--f-sans);font-size:.76rem}
 .n-action{width:100%;min-height:40px;border:1px solid var(--acc);border-radius:7px;color:var(--acc);background:#EEF3EF;font-family:var(--f-sans);font-size:.71rem;padding:8px;margin-top:7px}

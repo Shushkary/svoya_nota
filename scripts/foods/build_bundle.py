@@ -74,10 +74,22 @@ def normalise_name(name):
     return re.sub(r"[^a-z0-9]+", " ", text).strip()
 
 
+def term_pattern(term):
+    words = term.split()
+    if len(words) == 1:
+        return rf"\b{re.escape(term)}s?\b"
+    # Официальные базы часто пишут "Cheese, cottage" вместо "cottage cheese" —
+    # проверяем оба порядка слов в пределах короткого разделителя (запятая,
+    # пробел), иначе "творог" и подобные распознаются лишь в части записей.
+    forward = r"\b" + r"\W{1,3}".join(re.escape(word) for word in words) + r"s?\b"
+    backward = r"\b" + r"\W{1,3}".join(re.escape(word) for word in reversed(words)) + r"s?\b"
+    return f"(?:{forward}|{backward})"
+
+
 def russian_name(name):
     lower = str(name).lower()
     for term, translated in RU_TERMS:
-        if re.search(rf"\b{re.escape(term)}s?\b", lower):
+        if re.search(term_pattern(term), lower):
             qualifiers = []
             for en, ru in (("raw", "сырой"), ("cooked", "приготовленный"), ("boiled", "варёный"), ("roasted", "запечённый"), ("dried", "сушёный"), ("canned", "консервированный"), ("frozen", "замороженный")):
                 if en in lower:

@@ -7,12 +7,18 @@ import {
   combinedDigestiveLoad,
   digestionActivityAt,
   digestionFinishesBy,
+  digestionMovementOverlapShare,
   digestiveLoad,
+  earlyEnergyShare,
   effectiveDigestionHours,
   estimateDigestionHours,
   estimateProcessing,
+  lastDigestionFinishHour,
+  longestRestWindowMinutes,
   mealDigestionShift,
   mealTimestamp,
+  nearestClockTime,
+  nightFastHours,
   nutrientProgress,
   normalizeMeal,
   scaleMealPayload,
@@ -20,11 +26,14 @@ import {
 import { formatHour, hourToAngle, mealType } from '../../src/domain/nutrition/rhythm.js';
 import {
   ACTIVITY_MET,
+  continuousMovementDays,
   dailyActivityExpenditure,
   estimateActivityNutritionImpact,
   estimateActivityCalories,
   estimateStepCalories,
   findFreeActivityStart,
+  heatExposureDays,
+  lateActivityShare,
 } from '../../src/domain/nutrition/activity.js';
 import { canonicalStepsForDay, stepsActivity } from '../../src/domain/nutrition/steps.js';
 import { weekSummary } from '../../src/domain/loop.js';
@@ -91,6 +100,74 @@ test('приём 23:30 после полуночи относится к пре�
   assert.equal(timestamp.getDate(), 22);
   assert.equal(timestamp.getHours(), 23);
   assert.equal(timestamp.getMinutes(), 30);
+});
+
+test('nearestClockTime: обычные часы того же дня остаются на сегодня', () => {
+  const now = new Date(2026, 6, 22, 12, 25, 0);
+  const future = nearestClockTime(15, 0, now); // позже сейчас, тот же день
+  assert.equal(future.getDate(), 22);
+  assert.equal(future.getHours(), 15);
+  assert.ok(future.getTime() > now.getTime());
+
+  const past = nearestClockTime(8, 0, now); // раньше сейчас, тот же день
+  assert.equal(past.getDate(), 22);
+  assert.equal(past.getHours(), 8);
+  assert.ok(past.getTime() < now.getTime());
+});
+
+test('nearestClockTime: набранные поздно ночью ранние часы означают «скоро», а не «почти сутки назад»', () => {
+  const now = new Date(2026, 6, 22, 23, 50, 0); // без пяти минут полночь
+  const result = nearestClockTime(0, 15, now); // «00:15»
+  // ближайшее попадание — через 25 минут (23 число), а не 22 числа утром (23.5 ч назад)
+  assert.equal(result.getDate(), 23);
+  assert.equal(result.getHours(), 0);
+  assert.equal(result.getMinutes(), 15);
+  assert.ok(result.getTime() > now.getTime(), 'должно оказаться в ближайшем будущем, а не почти сутки в прошлом');
+  assert.ok(result.getTime() - now.getTime() < 30 * 60 * 1000);
+});
+
+test('nearestClockTime: обычный разрыв внутри дня не улетает на соседние сутки', () => {
+  // Завтрак в 08:00, внесённый вечером в 21:00 — разрыв 13 часов, больше
+  // порога в 6 часов. Наивное «ближайшее из соседних суток» перекинуло бы
+  // это на «завтра 08:00» (11 часов в будущем) и превратило бы обычную
+  // позднюю запись в фиктивный будущий приём — здесь дата должна остаться
+  // сегодняшней.
+  const now = new Date(2026, 6, 22, 21, 0, 0);
+  const result = nearestClockTime(8, 0, now);
+  assert.equal(result.getDate(), 22);
+  assert.equal(result.getHours(), 8);
+  assert.ok(result.getTime() < now.getTime());
+});
+
+test('nearestClockTime: зеркальный случай — поздний час, набранный вскоре после полуночи', () => {
+  // Сейчас 02:00, набрано «23:00»: как «сегодняшнее» 23:00 это 21 час в
+  // будущем — явно не то, что имелось в виду. Ближайшие сутки назад дают
+  // 23:00 всего 3 часа назад — то есть «вчера вечером».
+  const now = new Date(2026, 6, 22, 2, 0, 0);
+  const result = nearestClockTime(23, 0, now);
+  assert.equal(result.getDate(), 21);
+  assert.equal(result.getHours(), 23);
+  assert.ok(result.getTime() < now.getTime());
+  assert.equal(now.getTime() - result.getTime(), 3 * 60 * 60 * 1000);
+});
+
+test('nearestClockTime: за порогом в 6 часов «сегодня» остаётся в силе, даже в будущем', () => {
+  const now = new Date(2026, 6, 22, 10, 0, 0);
+  const result = nearestClockTime(20, 0, now); // через 10 часов — не «вчера»
+  assert.equal(result.getDate(), 22);
+  assert.equal(result.getHours(), 20);
+  assert.ok(result.getTime() > now.getTime());
+});
+
+test('nearestClockTime: композиция с существующей защитой от будущего приёма', () => {
+  // Тот же сценарий 23:50 → «00:15», но проверяем именно то, что защита от
+  // будущего приёма (clampMealTimestamp) реагирует на результат — так эта
+  // ситуация в форме «Вручную» вместо тихой ошибки на сутки покажет то же
+  // честное предупреждение, что и обычный будущий час.
+  const now = new Date(2026, 6, 22, 23, 50, 0);
+  const requested = nearestClockTime(0, 15, now);
+  assert.ok(requested.getTime() > now.getTime());
+  assert.equal(clampMealTimestamp(requested, now), now.getTime());
 });
 
 test('некорректные числовые поля нормализуются на доменной границе', () => {
@@ -260,6 +337,88 @@ test('активность учитывается во всём окне пер�
 
   assert.ok(walkFraction < restFraction, 'прогулка внутри окна должна ускорять затухание точек');
   assert.ok(runFraction > restFraction, 'интенсивная активность внутри окна должна замедлять затухание модели');
+});
+
+test('непрерывное движение считается по дням, а не по записям: рывки и короткие сессии не входят', () => {
+  const now = new Date(2026, 6, 20, 18, 0, 0);
+  const activities = [
+    { at: new Date(2026, 6, 10, 8, 0, 0).toISOString(), payload: { continuity: 'ровное', durationMin: 25, date: '2026-07-10' } },
+    { at: new Date(2026, 6, 10, 19, 0, 0).toISOString(), payload: { continuity: 'ровное', durationMin: 30, date: '2026-07-10' } }, // тот же день — не задваивает
+    { at: new Date(2026, 6, 12, 8, 0, 0).toISOString(), payload: { continuity: 'рывками', durationMin: 40, date: '2026-07-12' } }, // рывки не считаются
+    { at: new Date(2026, 6, 13, 8, 0, 0).toISOString(), payload: { continuity: 'ровное', durationMin: 10, date: '2026-07-13' } }, // короче 20 мин
+    { at: new Date(2026, 6, 14, 8, 0, 0).toISOString(), payload: { continuity: 'ровное', durationMin: 20, date: '2026-07-14', deleted: true } }, // удалена
+  ];
+  assert.equal(continuousMovementDays(activities, now, 14), 1);
+});
+
+test('тепловые события считаются по дням отдельно от нагрузки', () => {
+  const now = new Date(2026, 6, 20, 18, 0, 0);
+  const activities = [
+    { at: new Date(2026, 6, 15, 20, 0, 0).toISOString(), payload: { type: 'banya', date: '2026-07-15' } },
+    { at: new Date(2026, 6, 16, 8, 0, 0).toISOString(), payload: { type: 'heat', kind: 'hot_shower', date: '2026-07-16' } },
+    { at: new Date(2026, 6, 16, 21, 0, 0).toISOString(), payload: { type: 'heat', kind: 'cold_water', date: '2026-07-16' } }, // тот же день
+    { at: new Date(2026, 6, 17, 8, 0, 0).toISOString(), payload: { type: 'run', date: '2026-07-17' } }, // не тепло
+  ];
+  assert.equal(heatExposureDays(activities, now, 14), 2);
+});
+
+test('час завершения последнего переваривания берётся по самому позднему приёму', () => {
+  const meals = [
+    { kcal: 300, p: 15, f: 10, c: 30, fiber: 3, hour: 8, digestionH: 2 },
+    { kcal: 600, p: 30, f: 25, c: 50, fiber: 5, hour: 19, digestionH: 3 },
+  ];
+  assert.equal(lastDigestionFinishHour(meals, []), 22);
+  assert.equal(lastDigestionFinishHour([], []), null);
+});
+
+test('доля наложения еды и движения растёт, когда активность идёт во время переваривания', () => {
+  const now = new Date(2026, 6, 22, 12, 0, 0);
+  const meal = { kcal: 500, p: 25, f: 20, c: 45, fiber: 5, hour: 8, digestionH: 3, eatenAt: new Date(2026, 6, 22, 8, 0, 0).getTime() };
+  const noOverlap = digestionMovementOverlapShare([meal], [], now);
+  const withOverlap = digestionMovementOverlapShare([meal], [
+    { payload: { type: 'walk_brisk', startMin: 8 * 60 + 30, durationMin: 60, intensity: 'moderate' } },
+  ], now);
+  assert.equal(noOverlap, 0);
+  assert.ok(withOverlap > 0);
+});
+
+test('самое длинное окно покоя учитывает все приёмы дня', () => {
+  const now = new Date(2026, 6, 22, 23, 0, 0);
+  const meals = [
+    { kcal: 300, p: 15, f: 10, c: 30, fiber: 3, hour: 8, digestionH: 2, eatenAt: new Date(2026, 6, 22, 8, 0, 0).getTime() },
+    { kcal: 300, p: 15, f: 10, c: 30, fiber: 3, hour: 20, digestionH: 2, eatenAt: new Date(2026, 6, 22, 20, 0, 0).getTime() },
+  ];
+  const longest = longestRestWindowMinutes(meals, [], now);
+  // Между окончанием завтрака (~10:00) и началом ужина (20:00) — самое длинное окно.
+  assert.ok(longest >= 9 * 60 && longest <= 10 * 60 + 5);
+});
+
+test('ночной пост считается от последней еды вчера до первой еды сегодня', () => {
+  assert.equal(nightFastHours(20, 8), 12);
+  assert.equal(nightFastHours(22.5, 7), 8.5);
+  assert.equal(nightFastHours(null, 8), null);
+  assert.equal(nightFastHours(20, null), null);
+});
+
+test('доля ранней энергии считается по времени приёма, а не по числу приёмов', () => {
+  const meals = [
+    { hour: 8, kcal: 600 },
+    { hour: 20, kcal: 200 },
+  ];
+  // окно 8..20, середина 14: только завтрак (600) попадает в раннюю половину
+  assert.equal(earlyEnergyShare(meals), 0.75);
+  assert.equal(earlyEnergyShare([{ hour: 8, kcal: 100 }]), null, 'одного приёма мало для окна');
+  assert.equal(earlyEnergyShare([]), null);
+});
+
+test('доля позднего движения не учитывает оценённое время (шаги)', () => {
+  const real = [{ payload: { startMin: 19 * 60, durationMin: 30 } }]; // 19:00, окно 8..20 → во второй половине
+  assert.equal(lateActivityShare(real, 8, 20), 1);
+  const early = [{ payload: { startMin: 9 * 60, durationMin: 30 } }]; // 9:00 → в первой половине
+  assert.equal(lateActivityShare(early, 8, 20), 0);
+  const estimated = [{ payload: { startMin: 0, durationMin: 1440, estimatedTiming: true } }];
+  assert.equal(lateActivityShare(estimated, 8, 20), null, 'без реальных активностей доля не определена');
+  assert.equal(lateActivityShare(real, 20, 8), null, 'некорректное окно (конец раньше начала) не считается');
 });
 
 test('нагрузка на тороиде учитывает активность: плавание > покой > прогулка', () => {

@@ -4,14 +4,19 @@ import React, { useRef, useState } from 'react';
 import { byId } from '../../domain/practices.js';
 import { dayKey, kbjuOfDay } from '../../domain/loop.js';
 import {
-  latestState, openingState, STATE_PHASE, STATE_VALUE_KEYS, statePayload,
+  latestState, openingState, polarity, polarityQuadrant, representativeStateByKey,
+  STATE_PHASE, STATE_VALUE_KEYS, statePayload,
 } from '../../domain/stateCheckIn.js';
 import { parseTrackerCsv } from '../../infrastructure/trackerImport.js';
 import { loadPhoneSteps, savePhoneSteps } from '../../infrastructure/phoneSteps.js';
 import { estimateStepCalories } from '../../domain/nutrition/activity.js';
 import { isEveningBreathingWindow } from '../../domain/practice/reminders.js';
+import {
+  isMorningWindow, medianBedtimeHour, normalizeHour, phase, wakeAnchorHour, windowAt, WINDOWS,
+} from '../../domain/rhythm/day.js';
 import { DAY_NAMES, GENTLE, isoDay, planForDay, suggestGentle } from '../../domain/weekPlan.js';
 import { Card, Sheet, StateSliders } from '../components.jsx';
+import { warmthColor } from '../Toroid.jsx';
 
 const EMPTY_STATE = { calm: 3, energy: 3, clarity: 3, warmth: 3 };
 
@@ -73,6 +78,127 @@ function CheckIn({ states, addEntry, updateEntry }) {
   );
 }
 
+const WINDOW_LABELS = {
+  lightAndMovement: 'свет и движение',
+  mealAndAssimilation: 'приём и освоение',
+  activity: 'деятельность',
+  closing: 'закрытие',
+  nightFast: 'ночной пост',
+};
+// Цвет каждого окна — уже используемые в приложении тона (кольцо ккал,
+// цвет модулей «воля» и «аккорд»), а не новая палитра ради одного виджета.
+const WAKE_WINDOWS = [
+  ['lightAndMovement', '#8FB3C9'],
+  ['mealAndAssimilation', '#C8A96E'],
+  ['activity', '#7A5F9E'],
+  ['closing', '#8A6F4D'],
+];
+
+const hoursAfter = (hour, fromHour) => {
+  const diff = normalizeHour(hour) - normalizeHour(fromHour);
+  return diff >= 0 ? diff : diff + 24;
+};
+
+// Один виджет вместо семи часов на циферблате: положение в собственной дуге
+// подъём → отбой (полоса) и сегодняшняя полярность состояния (цвет точки).
+// Без данных за 14 дней — честное «пока рано», а не выдуманный час.
+function RhythmWidget({ wakeHour, bedtimeHour, now, expansion, gathering }) {
+  const [showInfo, setShowInfo] = useState(false);
+  if (wakeHour === null || bedtimeHour === null) {
+    return (
+      <Card eyebrow="Сейчас" tight>
+        <p className="dim small">
+          Пока мало данных для дневного ритма — появится через несколько дней
+          отметок, приёмов и заметок о сне. Мы ничего не подгоняем под часы —
+          подождём, пока накопится ваша собственная картина.
+        </p>
+      </Card>
+    );
+  }
+  const nowHour = now.getHours() + now.getMinutes() / 60;
+  const phaseValue = phase(nowHour, wakeHour, bedtimeHour);
+  const windowKey = windowAt(phaseValue);
+  const quadrant = polarityQuadrant(expansion, gathering);
+  const markerColor = expansion !== null && gathering !== null
+    ? warmthColor((expansion + gathering) / 2, 0.95)
+    : 'rgba(140,140,140,0.75)';
+  const inNight = phaseValue !== null && phaseValue >= 1;
+  const width = 300;
+  const barX = (v) => 8 + v * (width - 16);
+  const markerX = inNight ? width - 8 : barX(Math.min(1, Math.max(0, phaseValue ?? 0)));
+
+  return (
+    <Card eyebrow="Сейчас" tight>
+      <svg viewBox={`0 0 ${width} 22`} width="100%" height="22" role="img"
+        aria-label="Положение в дневном ритме">
+        {WAKE_WINDOWS.map(([key, color]) => {
+          const [start, end] = WINDOWS[key];
+          return (
+            <rect key={key} x={barX(start)} y="6" width={Math.max(0, barX(end) - barX(start))}
+              height="8" rx="2" fill={color} opacity={inNight ? 0.35 : 1} />
+          );
+        })}
+        <circle cx={markerX} cy="10" r="6" fill={markerColor} stroke="#fff" strokeWidth="1.5" />
+      </svg>
+      <p className="small" style={{ marginTop: 6 }}>
+        {inNight
+          ? `Ночной пост · ${hoursAfter(nowHour, bedtimeHour).toFixed(1)} ч после обычного отбоя`
+          : WINDOW_LABELS[windowKey] || '—'}
+        {quadrant && ` · ${quadrant.label}`}
+      </p>
+      <button type="button" className="tbtn" style={{ marginTop: 6 }} onClick={() => setShowInfo(true)}>
+        ⓘ что это за полоска
+      </button>
+      {showInfo && (
+        <Sheet onClose={() => setShowInfo(false)}>
+          <p className="eyebrow">Сейчас</p>
+          <h2>Что это за полоска</h2>
+          <p className="dim small">
+            Это не часы на стене, а ваш собственный день. Мы не спрашиваем,
+            жаворонок вы или сова, — просто смотрим, во сколько вы обычно
+            встаёте и ложитесь (по вашим же записям за 14 дней), и рисуем
+            дугу между этими двумя точками. У жаворонка и совы полоска
+            выглядит одинаково, даже если часы на циферблате у них разные.
+          </p>
+
+          <p className="eyebrow" style={{ marginTop: 16 }}>Цветные участки — фазы дня</p>
+          <p className="dim small">Слева направо, от подъёма к отбою:</p>
+          <div className="chips">
+            {WAKE_WINDOWS.map(([key, color]) => (
+              <span key={key} className="chip">
+                <span className="dot" style={{
+                  display: 'inline-block', width: 8, height: 8, borderRadius: 4,
+                  background: color, marginRight: 6,
+                }} />
+                {WINDOW_LABELS[key]}
+              </span>
+            ))}
+          </div>
+          <p className="dim small" style={{ marginTop: 8 }}>
+            После отбоя полоска гаснет и уступает место ночному посту — тому
+            промежутку, который вы почти всегда проводите во сне.
+          </p>
+
+          <p className="eyebrow" style={{ marginTop: 16 }}>Цвет точки — сегодняшнее состояние</p>
+          <p className="dim small">
+            Точка окрашена по вашим сегодняшним отметкам: от прохладного
+            серо-голубого к тёплому янтарю. Чем она теплее, тем больше в
+            сумме тепла к себе, ясности, покоя и энергии вы сегодня отметили.
+            Серая точка просто значит, что отметок сегодня ещё не было —
+            и это нормально, а не ошибка.
+          </p>
+
+          <p className="note" style={{ marginTop: 16 }}>
+            Иллюстрация по вашим же записям, а не расписание, которому
+            нужно следовать, и не диагноз.
+          </p>
+          <button className="btn" onClick={() => setShowInfo(false)}>Понятно</button>
+        </Sheet>
+      )}
+    </Card>
+  );
+}
+
 export default function Today({ journal, lists, addEntry, updateEntry, openPractice, goTo }) {
   const now = new Date();
   const today = dayKey(now);
@@ -80,6 +206,9 @@ export default function Today({ journal, lists, addEntry, updateEntry, openPract
   const states = lists.state.filter((s) => dayKey(s.at) === today);
   const firstState = openingState(states);
   const gentle = suggestGentle(firstState?.payload);
+  const wakeHour = wakeAnchorHour(lists, now);
+  const bedtimeHour = medianBedtimeHour(lists.activity, now);
+  const todayPolarity = polarity(representativeStateByKey(states));
   const donePractices = lists.practice.filter((p) => dayKey(p.at) === today);
   const kbju = kbjuOfDay(lists.meal, today);
   const todayActivities = lists.activity.filter((entry) => !entry.payload.deleted
@@ -97,9 +226,15 @@ export default function Today({ journal, lists, addEntry, updateEntry, openPract
   const saltDone = lists.ritual.some((e) => (e.payload?.type === 'saltWater' || e.payload?.type === 'electrolytes') && dayKey(e.at) === today);
   const [steps, setSteps] = useState(() => String(initialPhoneSteps?.steps ?? stepsToday?.payload.steps ?? ''));
   const [sleep, setSleep] = useState(() => String(sleepToday?.payload.sleepHours ?? ''));
+  const [bedtime, setBedtime] = useState(() => {
+    const raw = Number(sleepToday?.payload.bedtimeHour);
+    if (!Number.isFinite(raw)) return '';
+    const h = Math.floor(raw) % 24;
+    const m = Math.round((raw % 1) * 60);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  });
   const [saltModal, setSaltModal] = useState(false);
-  const hour = now.getHours();
-  const saltReminder = hour < 12 && !saltDone;
+  const saltReminder = isMorningWindow(now) && !saltDone;
   const eveningBreathReminder = isEveningBreathingWindow(now);
   const markSalt = () => {
     addEntry('ritual', { type: 'electrolytes', done: true, date: today }, `${today}T08:00:00`);
@@ -145,6 +280,9 @@ export default function Today({ journal, lists, addEntry, updateEntry, openPract
 
   return (
     <>
+      <RhythmWidget wakeHour={wakeHour} bedtimeHour={bedtimeHour} now={now}
+        expansion={todayPolarity.expansion} gathering={todayPolarity.gathering} />
+
       <Card eyebrow={`${DAY_NAMES[isoDay(now) - 1]} · день ${plan.day} недели`} module={plan.module}>
         <h2>{plan.title}</h2>
         <p className="dim">{plan.note}</p>
@@ -227,11 +365,20 @@ export default function Today({ journal, lists, addEntry, updateEntry, openPract
               <input type="number" inputMode="decimal" placeholder="Сон, ч" value={sleep}
                 onChange={(e) => setSleep(e.target.value)} aria-label="Сон, часов" />
             </div>
+            <label className="fl" htmlFor="bedtime-input">Во сколько легли (необязательно)</label>
+            <input id="bedtime-input" type="time" value={bedtime}
+              onChange={(e) => setBedtime(e.target.value)} aria-label="Во сколько легли спать" />
+            <p className="tiny dim">
+              Не обязательно. По медиане за 14 дней приложение считает, во сколько обычно
+              заканчивается переваривание — вместо фиксированного часа для всех.
+            </p>
             <button className="btn ghost" onClick={() => {
               const s = Number(steps), h = Number(sleep);
-              if (!s && !h) return;
+              const [bh, bm] = bedtime.split(':').map(Number);
+              const bedtimeHour = Number.isFinite(bh) && Number.isFinite(bm) ? bh + bm / 60 : undefined;
+              if (!s && !h && bedtimeHour === undefined) return;
               const importedLocally = phoneSteps?.steps === s;
-              if (importedLocally && !h && !activityToday) {
+              if (importedLocally && !h && bedtimeHour === undefined && !activityToday) {
                 setTrackerStatus(`Шаги уже сохранены только на этом устройстве: ${s.toLocaleString('ru-RU')}.`);
                 return;
               }
@@ -240,6 +387,7 @@ export default function Today({ journal, lists, addEntry, updateEntry, openPract
                 date: today,
                 steps: !importedLocally && s > 0 && s < 200000 ? s : undefined,
                 sleepHours: h > 0 && h <= 16 ? h : undefined,
+                bedtimeHour: bedtimeHour >= 0 && bedtimeHour < 24 ? bedtimeHour : activityToday?.payload?.bedtimeHour,
                 // Дневной итог шагов — не таймлайн тренировки. Тороид
                 // преобразует его в отдельную условную метку без влияния на
                 // окно переваривания.

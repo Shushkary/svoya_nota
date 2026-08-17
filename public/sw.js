@@ -6,7 +6,7 @@
  * в сеть и никогда не попадают в Cache Storage.
  */
 const CACHE_PREFIX = 'svoya-nota-';
-const CACHE_VERSION = '2026-08-03.30';
+const CACHE_VERSION = '2026-08-12.31';
 const SHELL_CACHE = `${CACHE_PREFIX}shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `${CACHE_PREFIX}static-${CACHE_VERSION}`;
 const ACTIVE_CACHES = new Set([SHELL_CACHE, STATIC_CACHE]);
@@ -26,6 +26,13 @@ const publicShellPaths = new Set(
     'icon.svg',
     'icon-192.png',
     'icon-512.png',
+    // Аудио для практики дыхания и юридические страницы («Ещё») открываются
+    // из уже установленного приложения — без сети они не должны 404-иться.
+    'audio/wim-hof-breathing.mp3',
+    'legal.css',
+    'license.html',
+    'pricing.html',
+    'privacy.html',
   ].map((path) => new URL(path, scopeUrl).pathname),
 );
 

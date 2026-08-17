@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from 'react';
-import foodsBundle from '../data/foods-core.json';
+import React, { useEffect, useMemo, useState } from 'react';
 import { foodComponent, scaleFoodPortion, searchFoods, sourceLabel } from '../domain/nutrition/foodCatalog.js';
+import { loadFoodCatalog } from '../infrastructure/foodCatalogLoader.js';
 
-const FOODS = Array.isArray(foodsBundle) ? foodsBundle : foodsBundle.foods || [];
 const SOURCES = {
   ciqual: 'https://ciqual.anses.fr/',
   usda_foundation: 'https://fdc.nal.usda.gov/download-datasets/',
+  usda_sr28: 'https://fdc.nal.usda.gov/',
   cofid: 'https://www.gov.uk/government/publications/composition-of-foods-integrated-dataset-cofid',
   afcd: 'https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-files',
 };
@@ -15,10 +15,18 @@ const NUTRIENTS = [
 ];
 
 export default function FoodCatalogPicker({ onAdd }) {
+  const [foods, setFoods] = useState(null);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(null);
   const [grams, setGrams] = useState('100');
-  const results = useMemo(() => searchFoods(FOODS, query, 8), [query]);
+
+  useEffect(() => {
+    let alive = true;
+    loadFoodCatalog().then((list) => { if (alive) setFoods(list); });
+    return () => { alive = false; };
+  }, []);
+
+  const results = useMemo(() => (foods ? searchFoods(foods, query, 8) : []), [foods, query]);
   const portion = selected ? scaleFoodPortion(selected, grams) : null;
   const sourceCodes = portion ? [...new Set(Object.values(portion.provenance))] : [];
 
@@ -31,7 +39,7 @@ export default function FoodCatalogPicker({ onAdd }) {
       </label>
       {query.trim() && !selected && (
         <div className="food-results" role="listbox" aria-label="Найденные продукты">
-          {results.length ? results.map((food) => (
+          {!foods ? <p className="dim small">Загружаю офлайн-таблицу…</p> : results.length ? results.map((food) => (
             <button type="button" role="option" key={food.id} onClick={() => { setSelected(food); setQuery(food.name_ru || food.name_en); }}>
               <b>{food.name_ru || food.name_en}</b>{food.name_ru && food.name_en ? <small>{food.name_en}</small> : null}
             </button>
@@ -49,7 +57,7 @@ export default function FoodCatalogPicker({ onAdd }) {
           <button type="button" className="n-action ghost" onClick={() => onAdd(foodComponent(selected, grams))}>Добавить продукт в блюдо</button>
         </div>
       )}
-      <details className="food-attribution"><summary>Источники и точность</summary><p>Ciqual (ANSES), USDA Foundation, UK CoFID и AFCD R3. Источник хранится отдельно для каждого нутриента; прочерки не заменяются нулями. Состав природных продуктов меняется, поэтому это справочные, а не лабораторные данные конкретной порции.</p></details>
+      <details className="food-attribution"><summary>Источники и точность</summary><p>Ciqual (ANSES), USDA SR28, UK CoFID и AFCD R3. Источник хранится отдельно для каждого нутриента; прочерки не заменяются нулями. Состав природных продуктов меняется, поэтому это справочные, а не лабораторные данные конкретной порции.</p></details>
     </section>
   );
 }

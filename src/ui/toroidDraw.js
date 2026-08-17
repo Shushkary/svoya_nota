@@ -46,9 +46,19 @@ function covers(segment, angle) {
   const end = start + clamp(segment.span, .02, TAU);
   return end <= TAU ? angle >= start && angle <= end : angle >= start || angle <= wrap(end);
 }
-// Есть ли активность на этом угле кольца (эталон: inActivity).
-function inActivity(segments, angle) {
-  return (segments || []).some((segment) => segment.isActivity && covers(segment, angle));
+// Активность на этом угле кольца: настоящая по времени — или дневной итог без
+// таймлайна (шаги телефона). У итога нет достоверного часа, поэтому он не
+// должен читаться как обычная тренировка — только как более тихая полоса.
+function activityKindAt(segments, angle) {
+  let real = false;
+  let estimated = false;
+  for (const segment of segments || []) {
+    if (!segment.isActivity || !covers(segment, angle)) continue;
+    if (segment.estimatedTiming) estimated = true; else real = true;
+  }
+  if (real) return 'real';
+  if (estimated) return 'estimated';
+  return null;
 }
 // Полоса переваривания: наибольшая нагрузка среди накрывающих приёмов + признак
 // позднего приёма (эталон: digestInfoAt). Переваренные приёмы полосу не рисуют.
@@ -129,10 +139,15 @@ export function drawNutrition(context, width, height, time, props, reduced) {
       // Приоритет сетки — как в эталоне: активность → полоса переваривания → базовый мешь.
       // Полоса переваривания учитывает ВСЕ приёмы, накрывающие этот угол (не только первый).
       const digest = digestInfoAt(props.segments, clockAngle);
+      const activityKind = activityKindAt(props.segments, clockAngle);
       let stroke;
-      if (inActivity(props.segments, clockAngle)) {
-        // активность — холодные голубые метки
+      if (activityKind === 'real') {
+        // активность с известным временем — холодные голубые метки
         stroke = `rgba(120,205,225,${(0.55 + 0.4 * light).toFixed(2)})`;
+      } else if (activityKind === 'estimated') {
+        // дневной итог без таймлайна (шаги) — тихая полоса на все сутки,
+        // не блок в конкретном часе: у него нет достоверного времени.
+        stroke = `rgba(150,190,200,${(0.16 + 0.14 * light).toFixed(2)})`;
       } else if (digest) {
         // Приём: жёлтая сетка, если прогноз завершится к 18:00;
         // красная — если прогнозируемое переваривание продолжится позже.
